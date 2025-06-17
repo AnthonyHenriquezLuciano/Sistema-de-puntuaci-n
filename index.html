@@ -399,10 +399,85 @@
             font-size: 4em;
             margin-bottom: 20px;
         }
+
+        /* Estilos para el modal de inicio de sesión */
+        .login-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .login-content h2 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .login-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .time-info {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Modal de inicio de sesión -->
+    <div class="login-modal" id="loginModal">
+        <div class="login-content">
+            <h2>Iniciar sesión</h2>
+            <p>Ingresa tu nombre para comenzar</p>
+            <input type="text" class="login-input" id="usernameInput" placeholder="Tu nombre de usuario">
+            <button class="login-btn" onclick="handleLogin()">Ingresar</button>
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer" style="display: none;">
         <div class="header">
             <h1>🎯 Sistema de Turnos</h1>
             <p>Gestión inteligente de turnos - 15 minutos por sesión</p>
@@ -414,6 +489,10 @@
                 <div class="connection-status" id="connectionStatus">Conectando...</div>
             </div>
             <div class="current-time" id="currentTime"></div>
+        </div>
+
+        <div class="time-info" id="timeInfo">
+            El sistema de turnos solo está disponible hasta las 5:00 PM. No podrás unirte a la cola después de este horario.
         </div>
 
         <div class="main-content">
@@ -503,37 +582,75 @@
         let currentTimer = null;
         let timerInterval = null;
         let isConnected = false;
+        let isLoggedIn = false;
         
         // Referencias de Firebase
         const queueRef = database.ref('queue');
         const timerRef = database.ref('timer');
         const connectedRef = database.ref('.info/connected');
 
+        // Mostrar modal de inicio de sesión al cargar
+        window.addEventListener('load', () => {
+            document.getElementById('loginModal').style.display = 'flex';
+        });
+
+        // Manejar inicio de sesión
+        function handleLogin() {
+            const usernameInput = document.getElementById('usernameInput');
+            const username = usernameInput.value.trim();
+            
+            if (!username) {
+                alert('Por favor ingresa un nombre de usuario');
+                return;
+            }
+            
+            currentUser = username;
+            currentUserId = generateUserId();
+            isLoggedIn = true;
+            
+            document.getElementById('userName').textContent = currentUser;
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            
+            initApp();
+        }
+
         // Generar ID único para el usuario
         function generateUserId() {
             return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
         }
 
-        // Obtener nombre de usuario
-        function getCurrentUser() {
-            let user = prompt("Ingresa tu nombre de usuario:");
-            if (!user || user.trim() === '') {
-                user = "Usuario_" + Math.floor(Math.random() * 1000);
-            }
-            return user.trim();
-        }
-
         // Inicializar la aplicación
         function initApp() {
-            currentUser = getCurrentUser();
-            currentUserId = generateUserId();
-            document.getElementById('userName').textContent = currentUser;
-            
             updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
             
             setupFirebaseListeners();
             showNotification(`¡Bienvenido ${currentUser}!`, 'success');
+            
+            // Verificar horario de atención
+            checkBusinessHours();
+            setInterval(checkBusinessHours, 60000); // Verificar cada minuto
+        }
+
+        // Verificar horario de atención (hasta las 5:00 PM)
+        function checkBusinessHours() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const timeInfoElement = document.getElementById('timeInfo');
+            const joinBtn = document.getElementById('joinQueueBtn');
+            
+            // Horario hasta las 17:00 (5:00 PM)
+            if (hours >= 17) {
+                timeInfoElement.style.display = 'block';
+                joinBtn.disabled = true;
+                joinBtn.textContent = 'Fuera de horario';
+            } else {
+                timeInfoElement.style.display = 'none';
+                joinBtn.disabled = false;
+                joinBtn.textContent = '🚀 Unirse a la Cola';
+            }
         }
 
         // Configurar listeners de Firebase
@@ -603,6 +720,13 @@
         async function joinQueue() {
             if (!isConnected) {
                 showNotification('No hay conexión con el servidor', 'error');
+                return;
+            }
+
+            // Verificar horario de atención
+            const now = new Date();
+            if (now.getHours() >= 17) {
+                showNotification('No puedes unirte a la cola después de las 5:00 PM', 'error');
                 return;
             }
 
@@ -705,6 +829,27 @@
                 }, 30000);
 
                 showNotification(`Turno completado para ${currentTimer.activeUser}`, 'success');
+                
+                // Volver a agregar automáticamente a la cola si no es después de las 5:00 PM
+                const now = new Date();
+                if (now.getHours() < 17) {
+                    setTimeout(async () => {
+                        const newGestor = {
+                            userId: currentTimer.activeUserId,
+                            user: currentTimer.activeUser,
+                            joinTime: Date.now(),
+                            status: 'esperando',
+                            id: Date.now()
+                        };
+                        
+                        try {
+                            await database.ref(`queue/${currentTimer.activeUserId}`).set(newGestor);
+                            showNotification('Has sido agregado nuevamente a la cola', 'success');
+                        } catch (error) {
+                            console.error('Error al volver a agregar a la cola:', error);
+                        }
+                    }, 1000);
+                }
                 
                 // Iniciar siguiente turno con tiempo completo
                 setTimeout(() => startNextTurn(), 1000);
@@ -919,9 +1064,6 @@
                 notification.classList.remove('show');
             }, 3000);
         }
-
-        // Inicializar al cargar la página
-        window.addEventListener('load', initApp);
 
         // Limpiar al cerrar
         window.addEventListener('beforeunload', () => {
