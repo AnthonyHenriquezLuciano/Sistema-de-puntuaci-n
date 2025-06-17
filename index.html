@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Turnos - Gestores</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .user-welcome {
+            font-size: 1.2em;
+            color: #2c3e50;
+        }
+
+        .user-name {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .current-time {
+            font-size: 1.1em;
+            color: #666;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+        }
+
+        .queue-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.8em;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            text-align: center;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .join-queue-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .join-queue-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        }
+
+        .join-queue-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .leave-queue-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .leave-queue-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .queue-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .queue-item {
+            background: #f8f9fa;
+            border-left: 5px solid #dee2e6;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .queue-item.active {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border-left-color: #fff;
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
+            transform: scale(1.02);
+        }
+
+        .queue-item.waiting {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+        }
+
+        .queue-item.completed {
+            border-left-color: #6c757d;
+            background: #e2e3e5;
+            opacity: 0.7;
+        }
+
+        .queue-position {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .queue-item.active .queue-position {
+            background: #fff;
+            color: #28a745;
+        }
+
+        .gestores-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .gestores-status {
+            font-size: 1em;
+            margin-bottom: 8px;
+        }
+
+        .gestores-time {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .timer-display {
+            background: #2c3e50;
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 25px;
+            box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .timer-time {
+            font-size: 3.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timer-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .timer-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .timer-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .timer-btn.pause {
+            background: linear-gradient(135deg, #ffc107, #ffca2c);
+            color: #212529;
+        }
+
+        .timer-btn.resume {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .timer-btn:disabled {
+            background: #6c757d;
+            color: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        .timer-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        .stats-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+        }
+
+        .stats-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .stats-item:last-child {
+            border-bottom: none;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .notification.warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .notification.error {
+            background: #dc3545;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .timer-time {
+                font-size: 2.5em;
+            }
+        }
+
+        .empty-queue {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+
+        .empty-queue-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Sistema de Turnos</h1>
+            <p>Gestión inteligente de turnos - 15 minutos por sesión</p>
+        </div>
+
+        <div class="user-info">
+            <div class="user-welcome">
+                👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
+            </div>
+            <div class="current-time" id="currentTime"></div>
+        </div>
+
+        <div class="main-content">
+            <div class="queue-section">
+                <h2 class="section-title">📋 Cola de Turnos</h2>
+                <button class="join-queue-btn" id="joinQueueBtn" onclick="joinQueue()">
+                    🚀 Unirse a la Cola
+                </button>
+                <button class="leave-queue-btn" id="leaveQueueBtn" onclick="leaveQueue()" style="display: none;">
+                    ❌ Salir de la Cola
+                </button>
+                <div class="queue-list" id="queueList">
+                    <div class="empty-queue">
+                        <div class="empty-queue-icon">📝</div>
+                        <div>No hay gestores en cola</div>
+                        <div style="font-size: 0.9em; margin-top: 10px;">¡Sé el primero en unirte!</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <h2 class="section-title">⏰ Control de Tiempo</h2>
+                
+                <div class="timer-display">
+                    <div class="timer-time" id="timerDisplay">15:00</div>
+                    <div class="timer-label">Tiempo restante</div>
+                </div>
+
+                <div class="timer-controls">
+                    <button class="timer-btn pause" id="pauseBtn" onclick="pauseTimer()" disabled>
+                        ⏸️ Pausar
+                    </button>
+                    <button class="timer-btn resume" id="resumeBtn" onclick="resumeTimer()" disabled>
+                        ▶️ Reanudar
+                    </button>
+                </div>
+
+                <div class="stats-section">
+                    <div class="stats-title">📊 Estadísticas</div>
+                    <div class="stats-item">
+                        <span>Gestores en cola:</span>
+                        <span id="queueCount">0</span>
+                    </div>
+                    <div class="stats-item">
+                        <span>Turno actual:</span>
+                        <span id="currentTurn">Ninguno</span>
+                    </div>
+                    <div class="stats-item">
+                        <span>Tu posición:</span>
+                        <span id="userPosition">No en cola</span>
+                    </div>
+                    <div class="stats-item">
+                        <span>Tiempo estimado:</span>
+                        <span id="estimatedTime">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // Variables globales
+        let currentUser = '';
+        let queue = [];
+        let currentTurnIndex = -1;
+        let timerSeconds = 15 * 60; // 15 minutos en segundos
+        let timerInterval = null;
+        let isTimerRunning = false;
+        let isPaused = false;
+        
+        // Obtener usuario de Windows (simulado para navegador)
+        function getCurrentUser() {
+            // En un entorno real, esto se obtendría del servidor
+            let user = prompt("Ingresa tu nombre de usuario:");
+            if (!user) {
+                user = "Usuario_" + Math.floor(Math.random() * 1000);
+            }
+            return user.trim();
+        }
+
+        // Inicializar la aplicación
+        function initApp() {
+            currentUser = getCurrentUser();
+            document.getElementById('userName').textContent = currentUser;
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+            updateDisplay();
+            
+            showNotification(`¡Bienvenido ${currentUser}!`, 'success');
+        }
+
+        // Actualizar hora actual
+        function updateCurrentTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = 
+                now.toLocaleString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+        }
+
+        // Unirse a la cola
+        function joinQueue() {
+            if (queue.find(item => item.user === currentUser)) {
+                showNotification('Ya estás en la cola', 'warning');
+                return;
+            }
+
+            const newGestor = {
+                user: currentUser,
+                joinTime: new Date(),
+                status: 'esperando',
+                id: Date.now()
+            };
+
+            queue.push(newGestor);
+            updateDisplay();
+            showNotification('Te has unido a la cola exitosamente', 'success');
+
+            // Si es el primero en la cola, iniciar su turno
+            if (queue.length === 1 && currentTurnIndex === -1) {
+                startNextTurn();
+            }
+        }
+
+        // Salir de la cola
+        function leaveQueue() {
+            const userIndex = queue.findIndex(item => item.user === currentUser);
+            if (userIndex === -1) {
+                showNotification('No estás en la cola', 'warning');
+                return;
+            }
+
+            // Si es el turno actual, pasar al siguiente
+            if (userIndex === currentTurnIndex) {
+                finishCurrentTurn();
+            } else {
+                queue.splice(userIndex, 1);
+                if (currentTurnIndex > userIndex) {
+                    currentTurnIndex--;
+                }
+            }
+
+            updateDisplay();
+            showNotification('Has salido de la cola', 'success');
+        }
+
+        // Iniciar siguiente turno
+        function startNextTurn() {
+            if (queue.length === 0) {
+                currentTurnIndex = -1;
+                resetTimer();
+                updateDisplay();
+                return;
+            }
+
+            // Encontrar el siguiente gestor en espera
+            const nextIndex = queue.findIndex(item => item.status === 'esperando');
+            if (nextIndex === -1) return;
+
+            currentTurnIndex = nextIndex;
+            queue[currentTurnIndex].status = 'activo';
+            queue[currentTurnIndex].startTime = new Date();
+            
+            resetTimer();
+            startTimer();
+            updateDisplay();
+            
+            showNotification(`Turno iniciado para ${queue[currentTurnIndex].user}`, 'success');
+        }
+
+        // Finalizar turno actual
+        function finishCurrentTurn() {
+            if (currentTurnIndex >= 0 && currentTurnIndex < queue.length) {
+                queue[currentTurnIndex].status = 'completado';
+                queue[currentTurnIndex].endTime = new Date();
+                
+                // Mover completado al final
+                const completed = queue.splice(currentTurnIndex, 1)[0];
+                
+                stopTimer();
+                
+                // Iniciar siguiente turno
+                currentTurnIndex = -1;
+                startNextTurn();
+                
+                showNotification(`Turno completado para ${completed.user}`, 'success');
+            }
+        }
+
+        // Control del temporizador
+        function startTimer() {
+            if (!isTimerRunning) {
+                isTimerRunning = true;
+                isPaused = false;
+                timerInterval = setInterval(updateTimer, 1000);
+            }
+        }
+
+        function pauseTimer() {
+            if (currentTurnIndex >= 0 && queue[currentTurnIndex].user === currentUser) {
+                isPaused = true;
+                clearInterval(timerInterval);
+                showNotification('Temporizador pausado', 'warning');
+                updateDisplay();
+            }
+        }
+
+        function resumeTimer() {
+            if (currentTurnIndex >= 0 && queue[currentTurnIndex].user === currentUser && isPaused) {
+                isPaused = false;
+                timerInterval = setInterval(updateTimer, 1000);
+                showNotification('Temporizador reanudado', 'success');
+                updateDisplay();
+            }
+        }
+
+        function stopTimer() {
+            isTimerRunning = false;
+            isPaused = false;
+            clearInterval(timerInterval);
+        }
+
+        function resetTimer() {
+            stopTimer();
+            timerSeconds = 15 * 60;
+            updateTimerDisplay();
+        }
+
+        function updateTimer() {
+            if (timerSeconds > 0) {
+                timerSeconds--;
+                updateTimerDisplay();
+            } else {
+                // Tiempo agotado
+                showNotification('¡Tiempo agotado!', 'warning');
+                finishCurrentTurn();
+            }
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timerSeconds / 60);
+            const seconds = timerSeconds % 60;
+            document.getElementById('timerDisplay').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Actualizar toda la interfaz
+        function updateDisplay() {
+            updateQueueDisplay();
+            updateStats();
+            updateButtons();
+        }
+
+        function updateQueueDisplay() {
+            const queueList = document.getElementById('queueList');
+            
+            if (queue.length === 0) {
+                queueList.innerHTML = `
+                    <div class="empty-queue">
+                        <div class="empty-queue-icon">📝</div>
+                        <div>No hay gestores en cola</div>
+                        <div style="font-size: 0.9em; margin-top: 10px;">¡Sé el primero en unirte!</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            queue.forEach((gestor, index) => {
+                const isActive = index === currentTurnIndex;
+                const position = gestor.status === 'esperando' ? 
+                    queue.filter((g, i) => i <= index && g.status === 'esperando').length : '';
+                
+                let statusText = '';
+                switch(gestor.status) {
+                    case 'esperando':
+                        statusText = '⏳ Esperando turno';
+                        break;
+                    case 'activo':
+                        statusText = isPaused ? '⏸️ En pausa' : '🟢 Turno activo';
+                        break;
+                    case 'completado':
+                        statusText = '✅ Completado';
+                        break;
+                }
+
+                const timeInfo = gestor.status === 'completado' && gestor.endTime ?
+                    `Completado: ${gestor.endTime.toLocaleTimeString()}` :
+                    `Ingresó: ${gestor.joinTime.toLocaleTimeString()}`;
+
+                html += `
+                    <div class="queue-item ${gestor.status === 'activo' ? 'active' : 
+                                            gestor.status === 'esperando' ? 'waiting' : 'completed'}">
+                        ${position ? `<div class="queue-position">${position}</div>` : ''}
+                        <div class="gestores-name">${gestor.user}</div>
+                        <div class="gestores-status">${statusText}</div>
+                        <div class="gestores-time">${timeInfo}</div>
+                    </div>
+                `;
+            });
+            
+            queueList.innerHTML = html;
+        }
+
+        function updateStats() {
+            const waitingCount = queue.filter(g => g.status === 'esperando').length;
+            document.getElementById('queueCount').textContent = waitingCount;
+            
+            const currentTurnUser = currentTurnIndex >= 0 ? queue[currentTurnIndex].user : 'Ninguno';
+            document.getElementById('currentTurn').textContent = currentTurnUser;
+            
+            const userInQueue = queue.find(g => g.user === currentUser);
+            if (userInQueue) {
+                if (userInQueue.status === 'activo') {
+                    document.getElementById('userPosition').textContent = 'En turno';
+                    document.getElementById('estimatedTime').textContent = 'Ahora';
+                } else if (userInQueue.status === 'esperando') {
+                    const userIndex = queue.findIndex(g => g.user === currentUser);
+                    const position = queue.filter((g, i) => i <= userIndex && g.status === 'esperando').length;
+                    const estimatedMinutes = (position - 1) * 15;
+                    document.getElementById('userPosition').textContent = `#${position}`;
+                    document.getElementById('estimatedTime').textContent = 
+                        estimatedMinutes > 0 ? `~${estimatedMinutes} min` : 'Próximo';
+                } else {
+                    document.getElementById('userPosition').textContent = 'Completado';
+                    document.getElementById('estimatedTime').textContent = '--';
+                }
+            } else {
+                document.getElementById('userPosition').textContent = 'No en cola';
+                document.getElementById('estimatedTime').textContent = '--';
+            }
+        }
+
+        function updateButtons() {
+            const userInQueue = queue.find(g => g.user === currentUser);
+            const joinBtn = document.getElementById('joinQueueBtn');
+            const leaveBtn = document.getElementById('leaveQueueBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+
+            // Botones de cola
+            if (userInQueue && userInQueue.status !== 'completado') {
+                joinBtn.style.display = 'none';
+                leaveBtn.style.display = 'block';
+            } else {
+                joinBtn.style.display = 'block';
+                leaveBtn.style.display = 'none';
+            }
+
+            // Botones de temporizador
+            const isUserTurn = currentTurnIndex >= 0 && queue[currentTurnIndex].user === currentUser;
+            pauseBtn.disabled = !isUserTurn || isPaused || !isTimerRunning;
+            resumeBtn.disabled = !isUserTurn || !isPaused;
+        }
+
+        // Mostrar notificaciones
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Inicializar al cargar la página
+        window.addEventListener('load', initApp);
+
+        // Limpiar intervalos al cerrar
+        window.addEventListener('beforeunload', () => {
+            clearInterval(timerInterval);
+        });
+    </script>
+</body>
+</html>
