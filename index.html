@@ -761,7 +761,7 @@
         }
 
         // Salir de la cola
-        async function leaveQueue() {
+async function leaveQueue() {
     if (!isConnected) {
         showNotification('No hay conexión con el servidor', 'error');
         return;
@@ -782,6 +782,7 @@
         if (currentTimer && currentTimer.activeUserId === currentUserId) {
             // 1. Detener el temporizador
             clearInterval(timerInterval);
+            timerInterval = null;
             
             // 2. Eliminar el registro del temporizador
             await timerRef.remove();
@@ -789,7 +790,12 @@
             // 3. Marcar como completado y eliminar de la cola
             await database.ref(`queue/${currentUserId}`).remove();
             
-            // 4. Iniciar siguiente turno
+            // 4. Resetear el estado local
+            currentTimer = null;
+            updateTimerDisplay(15 * 60);
+            document.getElementById('currentTurn').textContent = 'Ninguno';
+            
+            // 5. Iniciar siguiente turno
             setTimeout(() => startNextTurn(), 1000);
             
             showNotification('Has salido del turno activo', 'success');
@@ -807,12 +813,13 @@
         // Iniciar siguiente turno
 async function startNextTurn() {
     // Limpiar cualquier temporizador existente primero
-    if (currentTimer) {
-        await timerRef.remove();
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
     }
     
     // Obtener usuarios esperando (filtrando posibles usuarios completados)
-    const waitingUsers = queue.filter(g => g.status === 'esperando' && g.userId !== currentTimer?.activeUserId);
+    const waitingUsers = queue.filter(g => g.status === 'esperando');
     
     if (waitingUsers.length === 0) {
         await timerRef.remove();
@@ -841,7 +848,7 @@ async function startNextTurn() {
         console.error('Error al iniciar turno:', error);
     }
 }
-
+        
 // Busca esta función (alrededor de línea 680)
 function clearCurrentTurn() {
     clearInterval(timerInterval);
