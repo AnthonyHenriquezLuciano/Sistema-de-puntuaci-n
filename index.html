@@ -481,20 +481,16 @@
 
     <script>
         // CONFIGURACIÓN DE FIREBASE
-        // ¡¡¡ REEMPLAZA ESTOS VALORES CON TU CONFIGURACIÓN DE FIREBASE !!!
-
-  const firebaseConfig = {
-       apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-       authDomain: "sistema-turnos-gestores.firebaseapp.com",
-       databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-       projectId: "sistema-turnos-gestores",
-       storageBucket: "sistema-turnos-gestores.firebasestorage.app",
-       messagingSenderId: "322320112231",
-       appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-       measurementId: "G-GV4JVLKEFY"
-  };
-
-
+        const firebaseConfig = {
+            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
+            authDomain: "sistema-turnos-gestores.firebaseapp.com",
+            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
+            projectId: "sistema-turnos-gestores",
+            storageBucket: "sistema-turnos-gestores.firebasestorage.app",
+            messagingSenderId: "322320112231",
+            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
+            measurementId: "G-GV4JVLKEFY"
+        };
 
         // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
@@ -656,7 +652,7 @@
             try {
                 await database.ref(`queue/${currentUserId}`).remove();
                 
-                // Si era el turno actual, pasar al siguiente
+                // Si era el turno actual, pasar al siguiente con tiempo completo
                 if (currentTimer && currentTimer.activeUserId === currentUserId) {
                     await finishCurrentTurn();
                 }
@@ -681,7 +677,7 @@
                 activeUserId: nextUser.userId,
                 activeUser: nextUser.user,
                 startTime: Date.now(),
-                remainingSeconds: 15 * 60,
+                remainingSeconds: 15 * 60, // Siempre 15 minutos completos para el nuevo turno
                 isPaused: false,
                 lastUpdate: Date.now()
             };
@@ -710,7 +706,7 @@
 
                 showNotification(`Turno completado para ${currentTimer.activeUser}`, 'success');
                 
-                // Iniciar siguiente turno
+                // Iniciar siguiente turno con tiempo completo
                 setTimeout(() => startNextTurn(), 1000);
             } catch (error) {
                 console.error('Error al finalizar turno:', error);
