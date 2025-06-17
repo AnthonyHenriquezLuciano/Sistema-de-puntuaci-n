@@ -401,55 +401,68 @@
         }
 
         /* Estilos para el modal de inicio de sesión */
-    .password-input-container {
-            position: relative;
-            margin-bottom: 20px;
-        }
-        
-        .password-toggle {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #667eea;
-        }
-        
-        .login-options {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            font-size: 0.9em;
-        }
-        
-        .remember-me {
-            display: flex;
+        .login-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
             align-items: center;
         }
-        
-        .remember-me input {
-            margin-right: 5px;
+
+        .login-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
         }
-        
-        .forgot-password {
-            color: #667eea;
-            text-decoration: none;
+
+        .login-content h2 {
+            margin-bottom: 20px;
+            color: #2c3e50;
         }
-        
-        .forgot-password:hover {
-            text-decoration: underline;
+
+        .login-input {
+            width: 100%;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
         }
-        
-        .login-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 10px;
-            vertical-align: middle;
+
+        .login-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .time-info {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            display: none;
         }
     </style>
 </head>
@@ -458,27 +471,9 @@
     <div class="login-modal" id="loginModal">
         <div class="login-content">
             <h2>Iniciar sesión</h2>
-            <p>Ingresa tus credenciales para acceder al sistema</p>
-            
-            <input type="text" class="login-input" id="usernameInput" placeholder="Usuario o correo electrónico">
-            
-            <div class="password-input-container">
-                <input type="password" class="login-input" id="passwordInput" placeholder="Contraseña">
-                <span class="password-toggle" onclick="togglePasswordVisibility()">👁️</span>
-            </div>
-            
-            <div class="login-options">
-                <label class="remember-me">
-                    <input type="checkbox" id="rememberMe"> Recordarme
-                </label>
-                <a href="#" class="forgot-password" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</a>
-            </div>
-            
-            <button class="login-btn" id="loginBtn" onclick="handleLogin()">
-                <span id="loginBtnText">Ingresar</span>
-            </button>
-            
-            <div id="loginError" style="color: #dc3545; margin-top: 15px; display: none;"></div>
+            <p>Ingresa tu nombre para comenzar</p>
+            <input type="text" class="login-input" id="usernameInput" placeholder="Tu nombre de usuario">
+            <button class="login-btn" onclick="handleLogin()">Ingresar</button>
         </div>
     </div>
 
@@ -563,8 +558,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-
     <script>
         // CONFIGURACIÓN DE FIREBASE
         const firebaseConfig = {
@@ -581,7 +574,6 @@
         // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const auth = firebase.auth();
 
         // Variables globales
         let currentUser = '';
@@ -598,163 +590,29 @@
         const connectedRef = database.ref('.info/connected');
 
         // Mostrar modal de inicio de sesión al cargar
-       window.addEventListener('load', () => {
-            checkAuthState();
+        window.addEventListener('load', () => {
+            document.getElementById('loginModal').style.display = 'flex';
         });
 
-                // Verificar estado de autenticación al cargar
-        function checkAuthState() {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    // Usuario ya autenticado
-                    handleSuccessfulLogin(user);
-                } else {
-                    // Mostrar modal de login
-                    document.getElementById('loginModal').style.display = 'flex';
-                    
-                    // Verificar si hay credenciales guardadas
-                    const rememberedUser = localStorage.getItem('rememberedUser');
-                    if (rememberedUser) {
-                        const { email, password } = JSON.parse(rememberedUser);
-                        document.getElementById('usernameInput').value = email;
-                        document.getElementById('passwordInput').value = password;
-                        document.getElementById('rememberMe').checked = true;
-                    }
-                }
-            });
-        }
-
-         // Alternar visibilidad de contraseña
-        function togglePasswordVisibility() {
-            const passwordInput = document.getElementById('passwordInput');
-            const toggleIcon = document.querySelector('.password-toggle');
-            
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                toggleIcon.textContent = '🙈';
-            } else {
-                passwordInput.type = 'password';
-                toggleIcon.textContent = '👁️';
-            }
-        }
-
-        // Mostrar diálogo de contraseña olvidada
-        function showForgotPassword() {
-            const email = prompt("Por favor ingresa tu correo electrónico para recuperar tu contraseña:");
-            if (email) {
-                auth.sendPasswordResetEmail(email)
-                    .then(() => {
-                        showNotification('Se ha enviado un correo para restablecer tu contraseña', 'success');
-                    })
-                    .catch(error => {
-                        showNotification('Error al enviar correo de recuperación: ' + error.message, 'error');
-                    });
-            }
-        }
-
-// Manejar inicio de sesión mejorado
-        async function handleLogin() {
+        // Manejar inicio de sesión
+        function handleLogin() {
             const usernameInput = document.getElementById('usernameInput');
-            const passwordInput = document.getElementById('passwordInput');
-            const rememberMe = document.getElementById('rememberMe').checked;
-            const loginBtn = document.getElementById('loginBtn');
-            const loginBtnText = document.getElementById('loginBtnText');
-            const loginError = document.getElementById('loginError');
+            const username = usernameInput.value.trim();
             
-            const email = usernameInput.value.trim();
-            const password = passwordInput.value;
-
-
-                  // Validación básica
-            if (!email || !password) {
-                loginError.textContent = 'Por favor completa todos los campos';
-                loginError.style.display = 'block';
+            if (!username) {
+                alert('Por favor ingresa un nombre de usuario');
                 return;
             }
-        // Mostrar spinner y deshabilitar botón
-            loginBtn.disabled = true;
-            loginBtnText.innerHTML = '<span class="login-spinner"></span> Autenticando...';
-            loginError.style.display = 'none';
             
-            try {
-                // Intentar autenticación con Firebase Auth
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                
-                // Guardar credenciales si "Recordarme" está marcado
-                if (rememberMe) {
-                    localStorage.setItem('rememberedUser', JSON.stringify({ email, password }));
-                } else {
-                    localStorage.removeItem('rememberedUser');
-                }
-                
-                // Manejar login exitoso
-                handleSuccessfulLogin(userCredential.user);
-            } catch (error) {
-                // Manejar errores
-                let errorMessage = 'Error al iniciar sesión';
-                
-                switch(error.code) {
-                    case 'auth/user-not-found':
-                        errorMessage = 'Usuario no encontrado';
-                        break;
-                    case 'auth/wrong-password':
-                        errorMessage = 'Contraseña incorrecta';
-                        break;
-                    case 'auth/too-many-requests':
-                        errorMessage = 'Demasiados intentos. Cuenta temporalmente bloqueada';
-                        break;
-                    case 'auth/user-disabled':
-                        errorMessage = 'Cuenta deshabilitada';
-                        break;
-                    default:
-                        errorMessage = error.message;
-                }
-                
-                loginError.textContent = errorMessage;
-                loginError.style.display = 'block';
-                
-                // Restaurar botón
-                loginBtn.disabled = false;
-                loginBtnText.textContent = 'Ingresar';
-            }
-        }
-
-         // Manejar login exitoso
-        function handleSuccessfulLogin(user) {
-            currentUser = user.email;
-            currentUserId = user.uid;
+            currentUser = username;
+            currentUserId = generateUserId();
             isLoggedIn = true;
             
-            // Actualizar UI
-            document.getElementById('userName').textContent = currentUser.split('@')[0]; // Mostrar solo nombre sin dominio
+            document.getElementById('userName').textContent = currentUser;
             document.getElementById('loginModal').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
             
-            // Iniciar aplicación
             initApp();
-            
-            // Mostrar notificación
-            showNotification(`Bienvenido ${currentUser.split('@')[0]}!`, 'success');
-        }
-
-    // Cerrar sesión
-        function logout() {
-            if (confirm('¿Estás seguro que deseas cerrar sesión?')) {
-                auth.signOut().then(() => {
-                    // Limpiar estado
-                    currentUser = '';
-                    currentUserId = '';
-                    isLoggedIn = false;
-                    
-                    // Limpiar datos locales
-                    localStorage.removeItem('rememberedUser');
-                    
-                    // Recargar página para limpiar el estado
-                    location.reload();
-                }).catch(error => {
-                    showNotification('Error al cerrar sesión: ' + error.message, 'error');
-                });
-            }
         }
 
         // Generar ID único para el usuario
@@ -762,22 +620,17 @@
             return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
         }
 
-        // Modifica la función initApp para incluir seguridad
+        // Inicializar la aplicación
         function initApp() {
-            if (!isLoggedIn) {
-                document.getElementById('loginModal').style.display = 'flex';
-                document.getElementById('mainContainer').style.display = 'none';
-                return;
-            }
-            
             updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
             
             setupFirebaseListeners();
+            showNotification(`¡Bienvenido ${currentUser}!`, 'success');
             
             // Verificar horario de atención
             checkBusinessHours();
-            setInterval(checkBusinessHours, 60000);
+            setInterval(checkBusinessHours, 60000); // Verificar cada minuto
         }
 
         // Verificar horario de atención (hasta las 5:00 PM)
@@ -802,7 +655,6 @@
 
         // Configurar listeners de Firebase
         function setupFirebaseListeners() {
-            if (!isLoggedIn) return;
             // Monitorear conexión
             connectedRef.on('value', (snapshot) => {
                 isConnected = snapshot.val();
@@ -865,10 +717,9 @@
         }
 
         // Unirse a la cola
-         async function joinQueue() {
-            if (!isLoggedIn) {
-                showNotification('Debes iniciar sesión primero', 'error');
-                document.getElementById('loginModal').style.display = 'flex';
+        async function joinQueue() {
+            if (!isConnected) {
+                showNotification('No hay conexión con el servidor', 'error');
                 return;
             }
 
@@ -910,42 +761,34 @@
         }
 
         // Salir de la cola
-async function leaveQueue() {
-    if (!isConnected) {
-        showNotification('No hay conexión con el servidor', 'error');
-        return;
-    }
+        async function leaveQueue() {
+            if (!isConnected) {
+                showNotification('No hay conexión con el servidor', 'error');
+                return;
+            }
 
-    if (!confirm('¿Estás seguro que deseas salir de la cola?')) {
-        return;
-    }
+            const userInQueue = queue.find(item => item.userId === currentUserId);
+            if (!userInQueue) {
+                showNotification('No estás en la cola', 'warning');
+                return;
+            }
 
-    const userInQueue = queue.find(item => item.userId === currentUserId);
-    if (!userInQueue) {
-        showNotification('No estás en la cola', 'warning');
-        return;
-    }
-
-    try {
-        // Si es el turno actual
+            try {
+        // Si es el turno actual, finalizarlo primero
         if (currentTimer && currentTimer.activeUserId === currentUserId) {
-            // 1. Detener el temporizador
-            clearInterval(timerInterval);
-            timerInterval = null;
+            // 1. Actualizar estado a completado
+            await database.ref(`queue/${currentUserId}/status`).set('completado');
             
-            // 2. Eliminar el registro del temporizador
+            // 2. Eliminar el temporizador
             await timerRef.remove();
             
-            // 3. Marcar como completado y eliminar de la cola
-            await database.ref(`queue/${currentUserId}`).remove();
+            // 3. Eliminar de la cola después de un breve retraso
+            setTimeout(async () => {
+                await database.ref(`queue/${currentUserId}`).remove();
+            }, 1000);
             
-            // 4. Resetear el estado local
-            currentTimer = null;
-            updateTimerDisplay(15 * 60);
-            document.getElementById('currentTurn').textContent = 'Ninguno';
-            
-            // 5. Iniciar siguiente turno
-            setTimeout(() => startNextTurn(), 1000);
+            // 4. Iniciar siguiente turno inmediatamente
+            setTimeout(() => startNextTurn(), 1500);
             
             showNotification('Has salido del turno activo', 'success');
         } else {
@@ -955,20 +798,14 @@ async function leaveQueue() {
         }
     } catch (error) {
         console.error('Error al salir de la cola:', error);
-        showNotification('Error al salir de la cola. Intenta nuevamente.', 'error');
+        showNotification('Error al salir de la cola', 'error');
     }
 }
 
         // Iniciar siguiente turno
-async function startNextTurn() {
-    // Limpiar cualquier temporizador existente primero
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
-    
-    // Obtener usuarios esperando (filtrando posibles usuarios completados)
-    const waitingUsers = queue.filter(g => g.status === 'esperando');
+        async function startNextTurn() {
+    // Obtener usuarios esperando (filtrando posibles usuarios completados que aún no se han eliminado)
+    const waitingUsers = queue.filter(g => g.status === 'esperando' && g.userId !== currentTimer?.activeUserId);
     
     if (waitingUsers.length === 0) {
         await timerRef.remove();
@@ -987,24 +824,19 @@ async function startNextTurn() {
     };
 
     try {
-        // Actualizar estado del usuario primero
-        await database.ref(`queue/${nextUser.userId}/status`).set('activo');
-        // Luego crear el temporizador
         await timerRef.set(timerData);
-        
+        await database.ref(`queue/${nextUser.userId}/status`).set('activo');
         showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
     } catch (error) {
         console.error('Error al iniciar turno:', error);
     }
 }
-        
-// Busca esta función (alrededor de línea 680)
-function clearCurrentTurn() {
+
+        function clearCurrentTurn() {
     clearInterval(timerInterval);
     updateTimerDisplay(15 * 60);
     document.getElementById('currentTurn').textContent = 'Ninguno';
-    // Limpiar cualquier referencia al temporizador actual
-    currentTimer = null;
+}
 
         // Finalizar turno actual
         async function finishCurrentTurn() {
