@@ -762,33 +762,35 @@
 
         // Salir de la cola
         async function leaveQueue() {
-            if (!isConnected) {
-                showNotification('No hay conexión con el servidor', 'error');
-                return;
-            }
+    if (!isConnected) {
+        showNotification('No hay conexión con el servidor', 'error');
+        return;
+    }
 
-            const userInQueue = queue.find(item => item.userId === currentUserId);
-            if (!userInQueue) {
-                showNotification('No estás en la cola', 'warning');
-                return;
-            }
+    if (!confirm('¿Estás seguro que deseas salir de la cola?')) {
+        return;
+    }
 
-            try {
-        // Si es el turno actual, finalizarlo primero
+    const userInQueue = queue.find(item => item.userId === currentUserId);
+    if (!userInQueue) {
+        showNotification('No estás en la cola', 'warning');
+        return;
+    }
+
+    try {
+        // Si es el turno actual
         if (currentTimer && currentTimer.activeUserId === currentUserId) {
-            // 1. Actualizar estado a completado
-            await database.ref(`queue/${currentUserId}/status`).set('completado');
+            // 1. Detener el temporizador
+            clearInterval(timerInterval);
             
-            // 2. Eliminar el temporizador
+            // 2. Eliminar el registro del temporizador
             await timerRef.remove();
             
-            // 3. Eliminar de la cola después de un breve retraso
-            setTimeout(async () => {
-                await database.ref(`queue/${currentUserId}`).remove();
-            }, 1000);
+            // 3. Marcar como completado y eliminar de la cola
+            await database.ref(`queue/${currentUserId}`).remove();
             
-            // 4. Iniciar siguiente turno inmediatamente
-            setTimeout(() => startNextTurn(), 1500);
+            // 4. Iniciar siguiente turno
+            setTimeout(() => startNextTurn(), 1000);
             
             showNotification('Has salido del turno activo', 'success');
         } else {
@@ -798,13 +800,18 @@
         }
     } catch (error) {
         console.error('Error al salir de la cola:', error);
-        showNotification('Error al salir de la cola', 'error');
+        showNotification('Error al salir de la cola. Intenta nuevamente.', 'error');
     }
 }
 
         // Iniciar siguiente turno
-        async function startNextTurn() {
-    // Obtener usuarios esperando (filtrando posibles usuarios completados que aún no se han eliminado)
+async function startNextTurn() {
+    // Limpiar cualquier temporizador existente primero
+    if (currentTimer) {
+        await timerRef.remove();
+    }
+    
+    // Obtener usuarios esperando (filtrando posibles usuarios completados)
     const waitingUsers = queue.filter(g => g.status === 'esperando' && g.userId !== currentTimer?.activeUserId);
     
     if (waitingUsers.length === 0) {
@@ -824,19 +831,24 @@
     };
 
     try {
-        await timerRef.set(timerData);
+        // Actualizar estado del usuario primero
         await database.ref(`queue/${nextUser.userId}/status`).set('activo');
+        // Luego crear el temporizador
+        await timerRef.set(timerData);
+        
         showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
     } catch (error) {
         console.error('Error al iniciar turno:', error);
     }
 }
 
-        function clearCurrentTurn() {
+// Busca esta función (alrededor de línea 680)
+function clearCurrentTurn() {
     clearInterval(timerInterval);
     updateTimerDisplay(15 * 60);
     document.getElementById('currentTurn').textContent = 'Ninguno';
-}
+    // Limpiar cualquier referencia al temporizador actual
+    currentTimer = null;
 
         // Finalizar turno actual
         async function finishCurrentTurn() {
