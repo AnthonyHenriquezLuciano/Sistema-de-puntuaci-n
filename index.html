@@ -774,46 +774,69 @@
             }
 
             try {
+        // Si es el turno actual, finalizarlo primero
+        if (currentTimer && currentTimer.activeUserId === currentUserId) {
+            // 1. Actualizar estado a completado
+            await database.ref(`queue/${currentUserId}/status`).set('completado');
+            
+            // 2. Eliminar el temporizador
+            await timerRef.remove();
+            
+            // 3. Eliminar de la cola después de un breve retraso
+            setTimeout(async () => {
                 await database.ref(`queue/${currentUserId}`).remove();
-                
-                // Si era el turno actual, pasar al siguiente con tiempo completo
-                if (currentTimer && currentTimer.activeUserId === currentUserId) {
-                    await finishCurrentTurn();
-                }
-                
-                showNotification('Has salido de la cola', 'success');
-            } catch (error) {
-                console.error('Error al salir de la cola:', error);
-                showNotification('Error al salir de la cola', 'error');
-            }
+            }, 1000);
+            
+            // 4. Iniciar siguiente turno inmediatamente
+            setTimeout(() => startNextTurn(), 1500);
+            
+            showNotification('Has salido del turno activo', 'success');
+        } else {
+            // Si solo está en la cola esperando
+            await database.ref(`queue/${currentUserId}`).remove();
+            showNotification('Has salido de la cola', 'success');
         }
+    } catch (error) {
+        console.error('Error al salir de la cola:', error);
+        showNotification('Error al salir de la cola', 'error');
+    }
+}
 
         // Iniciar siguiente turno
         async function startNextTurn() {
-            const waitingUsers = queue.filter(g => g.status === 'esperando');
-            if (waitingUsers.length === 0) {
-                await timerRef.remove();
-                return;
-            }
+    // Obtener usuarios esperando (filtrando posibles usuarios completados que aún no se han eliminado)
+    const waitingUsers = queue.filter(g => g.status === 'esperando' && g.userId !== currentTimer?.activeUserId);
+    
+    if (waitingUsers.length === 0) {
+        await timerRef.remove();
+        showNotification('No hay más usuarios en la cola', 'info');
+        return;
+    }
 
-            const nextUser = waitingUsers[0];
-            const timerData = {
-                activeUserId: nextUser.userId,
-                activeUser: nextUser.user,
-                startTime: Date.now(),
-                remainingSeconds: 15 * 60, // Siempre 15 minutos completos para el nuevo turno
-                isPaused: false,
-                lastUpdate: Date.now()
-            };
+    const nextUser = waitingUsers[0];
+    const timerData = {
+        activeUserId: nextUser.userId,
+        activeUser: nextUser.user,
+        startTime: Date.now(),
+        remainingSeconds: 15 * 60,
+        isPaused: false,
+        lastUpdate: Date.now()
+    };
 
-            try {
-                await timerRef.set(timerData);
-                await database.ref(`queue/${nextUser.userId}/status`).set('activo');
-                showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
-            } catch (error) {
-                console.error('Error al iniciar turno:', error);
-            }
-        }
+    try {
+        await timerRef.set(timerData);
+        await database.ref(`queue/${nextUser.userId}/status`).set('activo');
+        showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
+    } catch (error) {
+        console.error('Error al iniciar turno:', error);
+    }
+}
+
+        function clearCurrentTurn() {
+    clearInterval(timerInterval);
+    updateTimerDisplay(15 * 60);
+    document.getElementById('currentTurn').textContent = 'Ninguno';
+}
 
         // Finalizar turno actual
         async function finishCurrentTurn() {
@@ -823,73 +846,74 @@
                 await database.ref(`queue/${currentTimer.activeUserId}/status`).set('completado');
                 await timerRef.remove();
                 
-                // Remover usuario completado después de 30 segundos
-                setTimeout(async () => {
-                    await database.ref(`queue/${currentTimer.activeUserId}`).remove();
-                }, 30000);
-
-                showNotification(`Turno completado para ${currentTimer.activeUser}`, 'success');
+                 // 3. Remover usuario completado después de un breve retraso
+        setTimeout(async () => {
+            await database.ref(`queue/${currentTimer.activeUserId}`).remove();
+            
+            // 4. Volver a agregar a la cola si no es después de las 5:00 PM
+            const now = new Date();
+            if (now.getHours() < 17) {
+                const newGestor = {
+                    userId: currentTimer.activeUserId,
+                    user: currentTimer.activeUser,
+                    joinTime: Date.now(),
+                    status: 'esperando',
+                    id: Date.now()
+                };
                 
-                // Volver a agregar automáticamente a la cola si no es después de las 5:00 PM
-                const now = new Date();
-                if (now.getHours() < 17) {
-                    setTimeout(async () => {
-                        const newGestor = {
-                            userId: currentTimer.activeUserId,
-                            user: currentTimer.activeUser,
-                            joinTime: Date.now(),
-                            status: 'esperando',
-                            id: Date.now()
-                        };
-                        
-                        try {
-                            await database.ref(`queue/${currentTimer.activeUserId}`).set(newGestor);
-                            showNotification('Has sido agregado nuevamente a la cola', 'success');
-                        } catch (error) {
-                            console.error('Error al volver a agregar a la cola:', error);
-                        }
-                    }, 1000);
+                try {
+                    await database.ref(`queue/${currentTimer.activeUserId}`).set(newGestor);
+                    showNotification(`${currentTimer.activeUser} ha sido agregado nuevamente a la cola`, 'success');
+                } catch (error) {
+                    console.error('Error al volver a agregar a la cola:', error);
                 }
-                
-                // Iniciar siguiente turno con tiempo completo
-                setTimeout(() => startNextTurn(), 1000);
-            } catch (error) {
-                console.error('Error al finalizar turno:', error);
             }
-        }
+        }, 1000);
+
+        showNotification(`Turno completado para ${currentTimer.activeUser}`, 'success');
+        
+        // 5. Iniciar siguiente turno
+        setTimeout(() => startNextTurn(), 1500);
+    } catch (error) {
+        console.error('Error al finalizar turno:', error);
+    }
+}
 
         // Sincronizar temporizador
-        function syncTimer() {
-            if (!currentTimer) return;
+function syncTimer() {
+    if (!currentTimer) {
+        clearCurrentTurn();
+        return;
+    }
 
+    clearInterval(timerInterval);
+
+    if (currentTimer.isPaused) {
+        updateTimerDisplay(currentTimer.remainingSeconds);
+        return;
+    }
+
+    const now = Date.now();
+    const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
+    let remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
+
+    if (remainingSeconds <= 0) {
+        finishCurrentTurn();
+        return;
+    }
+
+    updateTimerDisplay(remainingSeconds);
+
+    timerInterval = setInterval(() => {
+        remainingSeconds--;
+        updateTimerDisplay(remainingSeconds);
+
+        if (remainingSeconds <= 0) {
             clearInterval(timerInterval);
-
-            if (currentTimer.isPaused) {
-                updateTimerDisplay(currentTimer.remainingSeconds);
-                return;
-            }
-
-            const now = Date.now();
-            const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
-            let remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
-
-            if (remainingSeconds <= 0) {
-                finishCurrentTurn();
-                return;
-            }
-
-            updateTimerDisplay(remainingSeconds);
-
-            timerInterval = setInterval(() => {
-                remainingSeconds--;
-                updateTimerDisplay(remainingSeconds);
-
-                if (remainingSeconds <= 0) {
-                    clearInterval(timerInterval);
-                    finishCurrentTurn();
-                }
-            }, 1000);
+            finishCurrentTurn();
         }
+    }, 1000);
+}
 
         // Pausar temporizador
         async function pauseTimer() {
