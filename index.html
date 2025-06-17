@@ -69,6 +69,23 @@
             color: #666;
         }
 
+        .connection-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
         .main-content {
             display: grid;
             grid-template-columns: 1fr 400px;
@@ -330,6 +347,29 @@
             background: #dc3545;
         }
 
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         @media (max-width: 1024px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -371,6 +411,7 @@
         <div class="user-info">
             <div class="user-welcome">
                 👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
+                <div class="connection-status" id="connectionStatus">Conectando...</div>
             </div>
             <div class="current-time" id="currentTime"></div>
         </div>
@@ -385,10 +426,9 @@
                     ❌ Salir de la Cola
                 </button>
                 <div class="queue-list" id="queueList">
-                    <div class="empty-queue">
-                        <div class="empty-queue-icon">📝</div>
-                        <div>No hay gestores en cola</div>
-                        <div style="font-size: 0.9em; margin-top: 10px;">¡Sé el primero en unirte!</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <div>Conectando con Firebase...</div>
                     </div>
                 </div>
             </div>
@@ -435,21 +475,53 @@
 
     <div class="notification" id="notification"></div>
 
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <script>
+        // CONFIGURACIÓN DE FIREBASE
+        // ¡¡¡ REEMPLAZA ESTOS VALORES CON TU CONFIGURACIÓN DE FIREBASE !!!
+
+  const firebaseConfig = {
+       apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
+       authDomain: "sistema-turnos-gestores.firebaseapp.com",
+       databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
+       projectId: "sistema-turnos-gestores",
+       storageBucket: "sistema-turnos-gestores.firebasestorage.app",
+       messagingSenderId: "322320112231",
+       appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
+       measurementId: "G-GV4JVLKEFY"
+  };
+
+
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
         // Variables globales
         let currentUser = '';
+        let currentUserId = '';
         let queue = [];
-        let currentTurnIndex = -1;
-        let timerSeconds = 15 * 60; // 15 minutos en segundos
+        let currentTimer = null;
         let timerInterval = null;
-        let isTimerRunning = false;
-        let isPaused = false;
+        let isConnected = false;
         
-        // Obtener usuario de Windows (simulado para navegador)
+        // Referencias de Firebase
+        const queueRef = database.ref('queue');
+        const timerRef = database.ref('timer');
+        const connectedRef = database.ref('.info/connected');
+
+        // Generar ID único para el usuario
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        }
+
+        // Obtener nombre de usuario
         function getCurrentUser() {
-            // En un entorno real, esto se obtendría del servidor
             let user = prompt("Ingresa tu nombre de usuario:");
-            if (!user) {
+            if (!user || user.trim() === '') {
                 user = "Usuario_" + Math.floor(Math.random() * 1000);
             }
             return user.trim();
@@ -458,12 +530,62 @@
         // Inicializar la aplicación
         function initApp() {
             currentUser = getCurrentUser();
+            currentUserId = generateUserId();
             document.getElementById('userName').textContent = currentUser;
+            
             updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
-            updateDisplay();
             
+            setupFirebaseListeners();
             showNotification(`¡Bienvenido ${currentUser}!`, 'success');
+        }
+
+        // Configurar listeners de Firebase
+        function setupFirebaseListeners() {
+            // Monitorear conexión
+            connectedRef.on('value', (snapshot) => {
+                isConnected = snapshot.val();
+                updateConnectionStatus();
+            });
+
+            // Monitorear cola
+            queueRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                queue = data ? Object.values(data).sort((a, b) => a.joinTime - b.joinTime) : [];
+                updateDisplay();
+            });
+
+            // Monitorear temporizador
+            timerRef.on('value', (snapshot) => {
+                const timerData = snapshot.val();
+                if (timerData) {
+                    currentTimer = timerData;
+                    syncTimer();
+                } else {
+                    currentTimer = null;
+                    resetTimer();
+                }
+                updateDisplay();
+            });
+
+            // Cleanup al desconectar
+            window.addEventListener('beforeunload', () => {
+                if (currentUserId) {
+                    database.ref(`queue/${currentUserId}`).remove();
+                }
+            });
+        }
+
+        // Actualizar estado de conexión
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connectionStatus');
+            if (isConnected) {
+                statusElement.textContent = '🟢 Conectado';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = '🔴 Desconectado';
+                statusElement.className = 'connection-status disconnected';
+            }
         }
 
         // Actualizar hora actual
@@ -482,149 +604,199 @@
         }
 
         // Unirse a la cola
-        function joinQueue() {
-            if (queue.find(item => item.user === currentUser)) {
+        async function joinQueue() {
+            if (!isConnected) {
+                showNotification('No hay conexión con el servidor', 'error');
+                return;
+            }
+
+            const userInQueue = queue.find(item => item.userId === currentUserId);
+            if (userInQueue) {
                 showNotification('Ya estás en la cola', 'warning');
                 return;
             }
 
             const newGestor = {
+                userId: currentUserId,
                 user: currentUser,
-                joinTime: new Date(),
+                joinTime: Date.now(),
                 status: 'esperando',
                 id: Date.now()
             };
 
-            queue.push(newGestor);
-            updateDisplay();
-            showNotification('Te has unido a la cola exitosamente', 'success');
-
-            // Si es el primero en la cola, iniciar su turno
-            if (queue.length === 1 && currentTurnIndex === -1) {
-                startNextTurn();
+            try {
+                await database.ref(`queue/${currentUserId}`).set(newGestor);
+                showNotification('Te has unido a la cola exitosamente', 'success');
+                
+                // Si es el primero en la cola, iniciar su turno
+                setTimeout(() => {
+                    if (queue.length === 1 && !currentTimer) {
+                        startNextTurn();
+                    }
+                }, 500);
+            } catch (error) {
+                console.error('Error al unirse a la cola:', error);
+                showNotification('Error al unirse a la cola', 'error');
             }
         }
 
         // Salir de la cola
-        function leaveQueue() {
-            const userIndex = queue.findIndex(item => item.user === currentUser);
-            if (userIndex === -1) {
+        async function leaveQueue() {
+            if (!isConnected) {
+                showNotification('No hay conexión con el servidor', 'error');
+                return;
+            }
+
+            const userInQueue = queue.find(item => item.userId === currentUserId);
+            if (!userInQueue) {
                 showNotification('No estás en la cola', 'warning');
                 return;
             }
 
-            // Si es el turno actual, pasar al siguiente
-            if (userIndex === currentTurnIndex) {
-                finishCurrentTurn();
-            } else {
-                queue.splice(userIndex, 1);
-                if (currentTurnIndex > userIndex) {
-                    currentTurnIndex--;
+            try {
+                await database.ref(`queue/${currentUserId}`).remove();
+                
+                // Si era el turno actual, pasar al siguiente
+                if (currentTimer && currentTimer.activeUserId === currentUserId) {
+                    await finishCurrentTurn();
                 }
+                
+                showNotification('Has salido de la cola', 'success');
+            } catch (error) {
+                console.error('Error al salir de la cola:', error);
+                showNotification('Error al salir de la cola', 'error');
             }
-
-            updateDisplay();
-            showNotification('Has salido de la cola', 'success');
         }
 
         // Iniciar siguiente turno
-        function startNextTurn() {
-            if (queue.length === 0) {
-                currentTurnIndex = -1;
-                resetTimer();
-                updateDisplay();
+        async function startNextTurn() {
+            const waitingUsers = queue.filter(g => g.status === 'esperando');
+            if (waitingUsers.length === 0) {
+                await timerRef.remove();
                 return;
             }
 
-            // Encontrar el siguiente gestor en espera
-            const nextIndex = queue.findIndex(item => item.status === 'esperando');
-            if (nextIndex === -1) return;
+            const nextUser = waitingUsers[0];
+            const timerData = {
+                activeUserId: nextUser.userId,
+                activeUser: nextUser.user,
+                startTime: Date.now(),
+                remainingSeconds: 15 * 60,
+                isPaused: false,
+                lastUpdate: Date.now()
+            };
 
-            currentTurnIndex = nextIndex;
-            queue[currentTurnIndex].status = 'activo';
-            queue[currentTurnIndex].startTime = new Date();
-            
-            resetTimer();
-            startTimer();
-            updateDisplay();
-            
-            showNotification(`Turno iniciado para ${queue[currentTurnIndex].user}`, 'success');
+            try {
+                await timerRef.set(timerData);
+                await database.ref(`queue/${nextUser.userId}/status`).set('activo');
+                showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
+            } catch (error) {
+                console.error('Error al iniciar turno:', error);
+            }
         }
 
         // Finalizar turno actual
-        function finishCurrentTurn() {
-            if (currentTurnIndex >= 0 && currentTurnIndex < queue.length) {
-                queue[currentTurnIndex].status = 'completado';
-                queue[currentTurnIndex].endTime = new Date();
+        async function finishCurrentTurn() {
+            if (!currentTimer) return;
+
+            try {
+                await database.ref(`queue/${currentTimer.activeUserId}/status`).set('completado');
+                await timerRef.remove();
                 
-                // Mover completado al final
-                const completed = queue.splice(currentTurnIndex, 1)[0];
-                
-                stopTimer();
+                // Remover usuario completado después de 30 segundos
+                setTimeout(async () => {
+                    await database.ref(`queue/${currentTimer.activeUserId}`).remove();
+                }, 30000);
+
+                showNotification(`Turno completado para ${currentTimer.activeUser}`, 'success');
                 
                 // Iniciar siguiente turno
-                currentTurnIndex = -1;
-                startNextTurn();
-                
-                showNotification(`Turno completado para ${completed.user}`, 'success');
+                setTimeout(() => startNextTurn(), 1000);
+            } catch (error) {
+                console.error('Error al finalizar turno:', error);
             }
         }
 
-        // Control del temporizador
-        function startTimer() {
-            if (!isTimerRunning) {
-                isTimerRunning = true;
-                isPaused = false;
-                timerInterval = setInterval(updateTimer, 1000);
-            }
-        }
+        // Sincronizar temporizador
+        function syncTimer() {
+            if (!currentTimer) return;
 
-        function pauseTimer() {
-            if (currentTurnIndex >= 0 && queue[currentTurnIndex].user === currentUser) {
-                isPaused = true;
-                clearInterval(timerInterval);
-                showNotification('Temporizador pausado', 'warning');
-                updateDisplay();
-            }
-        }
-
-        function resumeTimer() {
-            if (currentTurnIndex >= 0 && queue[currentTurnIndex].user === currentUser && isPaused) {
-                isPaused = false;
-                timerInterval = setInterval(updateTimer, 1000);
-                showNotification('Temporizador reanudado', 'success');
-                updateDisplay();
-            }
-        }
-
-        function stopTimer() {
-            isTimerRunning = false;
-            isPaused = false;
             clearInterval(timerInterval);
-        }
 
-        function resetTimer() {
-            stopTimer();
-            timerSeconds = 15 * 60;
-            updateTimerDisplay();
-        }
+            if (currentTimer.isPaused) {
+                updateTimerDisplay(currentTimer.remainingSeconds);
+                return;
+            }
 
-        function updateTimer() {
-            if (timerSeconds > 0) {
-                timerSeconds--;
-                updateTimerDisplay();
-            } else {
-                // Tiempo agotado
-                showNotification('¡Tiempo agotado!', 'warning');
+            const now = Date.now();
+            const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
+            let remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
+
+            if (remainingSeconds <= 0) {
                 finishCurrentTurn();
+                return;
+            }
+
+            updateTimerDisplay(remainingSeconds);
+
+            timerInterval = setInterval(() => {
+                remainingSeconds--;
+                updateTimerDisplay(remainingSeconds);
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    finishCurrentTurn();
+                }
+            }, 1000);
+        }
+
+        // Pausar temporizador
+        async function pauseTimer() {
+            if (!currentTimer || currentTimer.activeUserId !== currentUserId) return;
+
+            const now = Date.now();
+            const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
+            const remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
+
+            try {
+                await timerRef.update({
+                    isPaused: true,
+                    remainingSeconds: remainingSeconds,
+                    lastUpdate: now
+                });
+                showNotification('Temporizador pausado', 'warning');
+            } catch (error) {
+                console.error('Error al pausar:', error);
             }
         }
 
-        function updateTimerDisplay() {
-            const minutes = Math.floor(timerSeconds / 60);
-            const seconds = timerSeconds % 60;
+        // Reanudar temporizador
+        async function resumeTimer() {
+            if (!currentTimer || currentTimer.activeUserId !== currentUserId) return;
+
+            try {
+                await timerRef.update({
+                    isPaused: false,
+                    lastUpdate: Date.now()
+                });
+                showNotification('Temporizador reanudado', 'success');
+            } catch (error) {
+                console.error('Error al reanudar:', error);
+            }
+        }
+
+        // Resetear temporizador
+        function resetTimer() {
+            clearInterval(timerInterval);
+            updateTimerDisplay(15 * 60);
+        }
+
+        // Actualizar display del temporizador
+        function updateTimerDisplay(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
             document.getElementById('timerDisplay').textContent = 
-                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
         // Actualizar toda la interfaz
@@ -634,6 +806,7 @@
             updateButtons();
         }
 
+        // Actualizar display de la cola
         function updateQueueDisplay() {
             const queueList = document.getElementById('queueList');
             
@@ -649,10 +822,11 @@
             }
 
             let html = '';
-            queue.forEach((gestor, index) => {
-                const isActive = index === currentTurnIndex;
-                const position = gestor.status === 'esperando' ? 
-                    queue.filter((g, i) => i <= index && g.status === 'esperando').length : '';
+            let waitingPosition = 1;
+            
+            queue.forEach((gestor) => {
+                const isActive = currentTimer && currentTimer.activeUserId === gestor.userId;
+                const position = gestor.status === 'esperando' ? waitingPosition++ : '';
                 
                 let statusText = '';
                 switch(gestor.status) {
@@ -660,16 +834,16 @@
                         statusText = '⏳ Esperando turno';
                         break;
                     case 'activo':
-                        statusText = isPaused ? '⏸️ En pausa' : '🟢 Turno activo';
+                        statusText = currentTimer && currentTimer.isPaused ? '⏸️ En pausa' : '🟢 Turno activo';
                         break;
                     case 'completado':
                         statusText = '✅ Completado';
                         break;
                 }
 
-                const timeInfo = gestor.status === 'completado' && gestor.endTime ?
-                    `Completado: ${gestor.endTime.toLocaleTimeString()}` :
-                    `Ingresó: ${gestor.joinTime.toLocaleTimeString()}`;
+                const timeInfo = gestor.status === 'completado' ?
+                    `Completado: ${new Date(gestor.joinTime).toLocaleTimeString()}` :
+                    `Ingresó: ${new Date(gestor.joinTime).toLocaleTimeString()}`;
 
                 html += `
                     <div class="queue-item ${gestor.status === 'activo' ? 'active' : 
@@ -685,21 +859,22 @@
             queueList.innerHTML = html;
         }
 
+        // Actualizar estadísticas
         function updateStats() {
             const waitingCount = queue.filter(g => g.status === 'esperando').length;
             document.getElementById('queueCount').textContent = waitingCount;
             
-            const currentTurnUser = currentTurnIndex >= 0 ? queue[currentTurnIndex].user : 'Ninguno';
+            const currentTurnUser = currentTimer ? currentTimer.activeUser : 'Ninguno';
             document.getElementById('currentTurn').textContent = currentTurnUser;
             
-            const userInQueue = queue.find(g => g.user === currentUser);
+            const userInQueue = queue.find(g => g.userId === currentUserId);
             if (userInQueue) {
                 if (userInQueue.status === 'activo') {
                     document.getElementById('userPosition').textContent = 'En turno';
                     document.getElementById('estimatedTime').textContent = 'Ahora';
                 } else if (userInQueue.status === 'esperando') {
-                    const userIndex = queue.findIndex(g => g.user === currentUser);
-                    const position = queue.filter((g, i) => i <= userIndex && g.status === 'esperando').length;
+                    const waitingUsers = queue.filter(g => g.status === 'esperando');
+                    const position = waitingUsers.findIndex(g => g.userId === currentUserId) + 1;
                     const estimatedMinutes = (position - 1) * 15;
                     document.getElementById('userPosition').textContent = `#${position}`;
                     document.getElementById('estimatedTime').textContent = 
@@ -714,8 +889,9 @@
             }
         }
 
+        // Actualizar botones
         function updateButtons() {
-            const userInQueue = queue.find(g => g.user === currentUser);
+            const userInQueue = queue.find(g => g.userId === currentUserId);
             const joinBtn = document.getElementById('joinQueueBtn');
             const leaveBtn = document.getElementById('leaveQueueBtn');
             const pauseBtn = document.getElementById('pauseBtn');
@@ -731,9 +907,9 @@
             }
 
             // Botones de temporizador
-            const isUserTurn = currentTurnIndex >= 0 && queue[currentTurnIndex].user === currentUser;
-            pauseBtn.disabled = !isUserTurn || isPaused || !isTimerRunning;
-            resumeBtn.disabled = !isUserTurn || !isPaused;
+            const isUserTurn = currentTimer && currentTimer.activeUserId === currentUserId;
+            pauseBtn.disabled = !isUserTurn || (currentTimer && currentTimer.isPaused) || !isConnected;
+            resumeBtn.disabled = !isUserTurn || !currentTimer || !currentTimer.isPaused || !isConnected;
         }
 
         // Mostrar notificaciones
@@ -751,9 +927,12 @@
         // Inicializar al cargar la página
         window.addEventListener('load', initApp);
 
-        // Limpiar intervalos al cerrar
+        // Limpiar al cerrar
         window.addEventListener('beforeunload', () => {
             clearInterval(timerInterval);
+            if (currentUserId) {
+                database.ref(`queue/${currentUserId}`).remove();
+            }
         });
     </script>
 </body>
