@@ -637,7 +637,7 @@
                     const now = Date.now();
                     snapshot.forEach(child => {
                         const data = child.val();
-                        if (!PREDEFINED_USERS.includes(data.user) || (now - data.lastActive) > 5 * 60 * 1000) {
+                        if (!PREDEFINED_USERS.includes(data.user) || (now - data.lastActive) > 2 * 60 * 1000) {
                             child.ref.remove();
                         }
                     });
@@ -678,15 +678,6 @@
                 console.error('Error en listener de turno:', error);
                 showNotification(`Error en turno: ${error.message}`, 'error');
             });
-
-            activeUsersRef.child(currentUser).on('value', snapshot => {
-                if (snapshot.exists() && snapshot.val().sessionId !== sessionId) {
-                    showNotification('Sesión iniciada en otro dispositivo. Cerrando.', 'error');
-                    logout();
-                }
-            }, error => {
-                console.error('Error en listener de activeUsers:', error);
-            });
         }
 
         function setupLoginUI() {
@@ -725,14 +716,21 @@
 
         async function handleLogin(selectedUser) {
             if (!isConnected) throw new Error('Sin conexión al servidor');
+
+            // Verificar si el usuario ya está conectado
+            const userSnapshot = await activeUsersRef.child(selectedUser).once('value');
+            if (userSnapshot.exists()) {
+                throw new Error('Usuario ya está conectado');
+            }
+
             sessionId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
             const result = await activeUsersRef.child(selectedUser).transaction(current => {
                 if (current) return undefined;
                 return { user: selectedUser, sessionId, lastActive: Date.now() };
             });
 
-            if (!result.committed || result.snapshot.exists() && result.snapshot.val().sessionId !== sessionId) {
-                throw new Error('Usuario ya está en uso');
+            if (!result.committed) {
+                throw new Error('Usuario ya está conectado');
             }
 
             currentUser = selectedUser;
