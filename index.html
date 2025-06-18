@@ -476,13 +476,83 @@
                 <!-- Opciones se llenarán dinámicamente -->
             </select>
             <div id="userError" style="color: #dc3545; margin-bottom: 15px; display: none;"></div>
-            <button class="login-btn" onclick="handleLogin()">Ingresar</button>
+            <button class="login-btn" id="loginButton">Ingresar</button>
         </div>
     </div>
 
     <div class="container" id="mainContainer" style="display: none;">
-        <!-- Resto del HTML permanece igual -->
-        <!-- ... -->
+        <div class="header">
+            <h1>🎯 Sistema de Turnos</h1>
+            <p>Gestión inteligente de turnos - 15 minutos por sesión</p>
+        </div>
+
+        <div class="user-info">
+            <div class="user-welcome">
+                👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
+                <div class="connection-status" id="connectionStatus">Conectando...</div>
+            </div>
+            <div class="current-time" id="currentTime"></div>
+        </div>
+
+        <div class="time-info" id="timeInfo">
+            El sistema de turnos solo está disponible hasta las 5:00 PM. No podrás unirte a la cola después de este horario.
+        </div>
+
+        <div class="main-content">
+            <div class="queue-section">
+                <h2 class="section-title">📋 Cola de Turnos</h2>
+                <button class="join-queue-btn" id="joinQueueBtn">
+                    🚀 Unirse a la Cola
+                </button>
+                <button class="leave-queue-btn" id="leaveQueueBtn" style="display: none;">
+                    ❌ Salir de la Cola
+                </button>
+                <div class="queue-list" id="queueList">
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <div>Conectando con Firebase...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <h2 class="section-title">⏰ Control de Tiempo</h2>
+                
+                <div class="timer-display">
+                    <div class="timer-time" id="timerDisplay">15:00</div>
+                    <div class="timer-label">Tiempo restante</div>
+                </div>
+
+                <div class="timer-controls">
+                    <button class="timer-btn pause" id="pauseBtn" disabled>
+                        ⏸️ Pausar
+                    </button>
+                    <button class="timer-btn resume" id="resumeBtn" disabled>
+                        ▶️ Reanudar
+                    </button>
+                </div>
+
+                <div class="stats-section">
+                    <div class="stats-title">📊 Estadísticas</div>
+                    <div class="stats-item">
+                        <span>Gestores en cola:</span>
+                        <span id="queueCount">0</span>
+                    </div>
+                    <div class="stats-item">
+                        <span>Turno actual:</span>
+                        <span id="currentTurn">Ninguno</span>
+                    </div>
+                    <div class="stats-item">
+                        <span>Tu posición:</span>
+                        <span id="userPosition">No en cola</span>
+                    </div>
+                    <div class="stats-item">
+                        <span>Tiempo estimado:</span>
+                        <span id="estimatedTime">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="notification" id="notification"></div>
@@ -534,13 +604,28 @@
         // Mostrar modal de inicio de sesión al cargar
         window.addEventListener('load', () => {
             const userSelect = document.getElementById('userSelect');
+            userSelect.innerHTML = '';
+            
+            // Agregar opción por defecto
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Selecciona tu usuario';
+            defaultOption.selected = true;
+            defaultOption.disabled = true;
+            userSelect.appendChild(defaultOption);
+            
+            // Agregar usuarios predefinidos
             predefinedUsers.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user;
                 option.textContent = user;
                 userSelect.appendChild(option);
             });
+            
             document.getElementById('loginModal').style.display = 'flex';
+            
+            // Configurar event listener para el botón de login
+            document.getElementById('loginButton').addEventListener('click', handleLogin);
         });
 
         // Manejar inicio de sesión
@@ -551,6 +636,13 @@
 
             if (!selectedUser) {
                 userError.textContent = 'Por favor selecciona un usuario';
+                userError.style.display = 'block';
+                return;
+            }
+            
+            // Verificar si el usuario está en la lista predefinida
+            if (!predefinedUsers.includes(selectedUser)) {
+                userError.textContent = 'Usuario no autorizado';
                 userError.style.display = 'block';
                 return;
             }
@@ -595,6 +687,12 @@
             // Verificar horario de atención
             checkBusinessHours();
             setInterval(checkBusinessHours, 60000); // Verificar cada minuto
+            
+            // Configurar event listeners para los botones
+            document.getElementById('joinQueueBtn').addEventListener('click', joinQueue);
+            document.getElementById('leaveQueueBtn').addEventListener('click', leaveQueue);
+            document.getElementById('pauseBtn').addEventListener('click', pauseTimer);
+            document.getElementById('resumeBtn').addEventListener('click', resumeTimer);
         }
 
         // Verificar horario de atención (hasta las 5:00 PM)
