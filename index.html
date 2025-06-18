@@ -463,6 +463,25 @@
             font-size: 0.9em;
             display: none;
         }
+
+        .error-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 500px;
+            margin: 50px auto;
+        }
+
+        .error-container button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -557,9 +576,9 @@
     <div class="notification" id="notification"></div>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 
     <script>
         // CONFIGURACIÓN DE FIREBASE
@@ -574,11 +593,6 @@
             measurementId: "G-GV4JVLKEFY"
         };
 
-        // Inicializar Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        const auth = firebase.auth();
-
         // Variables globales
         let currentUser = '';
         let currentUserId = '';
@@ -588,6 +602,7 @@
         let timerInterval = null;
         let isConnected = false;
         let isLoggedIn = false;
+        let database, auth, activeUsersRef, queueRef, timerRef, connectedRef;
         
         // Lista de usuarios predefinidos
         const predefinedUsers = [
@@ -598,38 +613,97 @@
             "Laura Martínez"
         ];
 
-        // Referencias de Firebase
-        const activeUsersRef = database.ref('activeUsers');
-        const queueRef = database.ref('queue');
-        const timerRef = database.ref('timer');
-        const connectedRef = database.ref('.info/connected');
-
         // Mostrar modal de inicio de sesión al cargar
         window.addEventListener('load', () => {
-            const userSelect = document.getElementById('userSelect');
-            userSelect.innerHTML = '';
-            
-            // Agregar opción por defecto
-            const defaultOption = document.createElement('option');
-            defaultOption.value = '';
-            defaultOption.textContent = 'Selecciona tu usuario';
-            defaultOption.selected = true;
-            defaultOption.disabled = true;
-            userSelect.appendChild(defaultOption);
-            
-            // Agregar usuarios predefinidos
-            predefinedUsers.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user;
-                option.textContent = user;
-                userSelect.appendChild(option);
-            });
-            
-            document.getElementById('loginModal').style.display = 'flex';
-            
-            // Configurar event listener para el botón de login
-            document.getElementById('loginButton').addEventListener('click', handleLogin);
+            initializeApp();
         });
+
+        // Inicializar la aplicación
+        async function initializeApp() {
+            try {
+                // Configurar select de usuarios
+                const userSelect = document.getElementById('userSelect');
+                userSelect.innerHTML = '';
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Selecciona tu usuario';
+                defaultOption.selected = true;
+                defaultOption.disabled = true;
+                userSelect.appendChild(defaultOption);
+                
+                predefinedUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user;
+                    option.textContent = user;
+                    userSelect.appendChild(option);
+                });
+                
+                document.getElementById('loginModal').style.display = 'flex';
+                
+                // Configurar event listener para el botón de login
+                document.getElementById('loginButton').addEventListener('click', handleLogin);
+                
+                // Inicializar Firebase
+                await initializeFirebase();
+            } catch (error) {
+                console.error("Error inicializando la aplicación:", error);
+                showErrorScreen("Error al inicializar la aplicación");
+            }
+        }
+
+        // Inicializar Firebase con manejo de errores
+        async function initializeFirebase() {
+            try {
+                // Verificar si Firebase ya está inicializado
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                
+                database = firebase.database();
+                auth = firebase.auth();
+                
+                // Referencias de Firebase
+                activeUsersRef = database.ref('activeUsers');
+                queueRef = database.ref('queue');
+                timerRef = database.ref('timer');
+                connectedRef = database.ref('.info/connected');
+                
+                // Configurar listener de conexión
+                setupConnectionListener();
+                
+            } catch (error) {
+                console.error("Error inicializando Firebase:", error);
+                throw error;
+            }
+        }
+
+        // Configurar listener de conexión
+        function setupConnectionListener() {
+            connectedRef.on('value', (snap) => {
+                const newConnectionState = snap.val();
+                
+                if (newConnectionState !== isConnected) {
+                    isConnected = newConnectionState;
+                    updateConnectionStatus();
+                    
+                    if (isConnected && isLoggedIn) {
+                        showNotification('Conexión restablecida', 'success');
+                        syncData();
+                    } else if (!isConnected && isLoggedIn) {
+                        showNotification('Se perdió la conexión. Intentando reconectar...', 'warning');
+                    }
+                }
+            });
+        }
+
+        // Sincronizar datos al reconectar
+        function syncData() {
+            if (currentTimer) {
+                syncTimer();
+            }
+            updateDisplay();
+        }
 
         // Manejar inicio de sesión
         async function handleLogin() {
@@ -644,21 +718,34 @@
             }
             
             try {
+                // Verificar conexión primero
+                if (!isConnected) {
+                    showNotification('No hay conexión con el servidor', 'error');
+                    return;
+                }
+
                 // Autenticación anónima
                 const userCredential = await auth.signInAnonymously();
                 authUserId = userCredential.user.uid;
 
-                // Verificar si el usuario ya está activo
-                const snapshot = await activeUsersRef.child(selectedUser).once('value');
-                if (snapshot.exists()) {
-                    userError.textContent = 'Este usuario ya está en uso';
-                    userError.style.display = 'block';
-                    await auth.signOut();
-                    return;
-                }
-
-                // Reservar el usuario
-                await activeUsersRef.child(selectedUser).set(authUserId);
+                // Verificar si el usuario ya está activo usando transacción
+                await database.ref().transaction(async (currentData) => {
+                    if (!currentData) return null;
+                    
+                    const activeUsers = currentData.activeUsers || {};
+                    
+                    if (activeUsers[selectedUser]) {
+                        throw new Error('Este usuario ya está en uso');
+                    }
+                    
+                    // Reservar el usuario
+                    currentData.activeUsers = {
+                        ...activeUsers,
+                        [selectedUser]: authUserId
+                    };
+                    
+                    return currentData;
+                });
 
                 currentUser = selectedUser;
                 currentUserId = generateUserId();
@@ -668,40 +755,62 @@
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
 
-                initApp();
+                // Configurar listeners y temporizadores
+                setupFirebaseListeners();
+                updateCurrentTime();
+                setInterval(updateCurrentTime, 1000);
+                checkBusinessHours();
+                setInterval(checkBusinessHours, 60000);
+                
+                // Configurar event listeners para los botones
+                document.getElementById('joinQueueBtn').addEventListener('click', joinQueue);
+                document.getElementById('leaveQueueBtn').addEventListener('click', leaveQueue);
+                document.getElementById('pauseBtn').addEventListener('click', pauseTimer);
+                document.getElementById('resumeBtn').addEventListener('click', resumeTimer);
+                
+                showNotification(`¡Bienvenido ${currentUser}!`, 'success');
             } catch (error) {
                 console.error('Error en login:', error);
-                userError.textContent = 'Error al iniciar sesión';
+                userError.textContent = error.message || 'Error al iniciar sesión';
                 userError.style.display = 'block';
                 
-                if (error.code === 'PERMISSION_DENIED') {
-                    userError.textContent = 'Este usuario ya está en uso en otro dispositivo';
+                // Limpiar en caso de error
+                if (auth.currentUser) {
+                    await auth.signOut();
                 }
             }
+        }
+
+        // Configurar listeners de Firebase
+        function setupFirebaseListeners() {
+            // Listener para la cola (ordenado por tiempo de llegada)
+            queueRef.orderByChild('joinTime').on('value', (snapshot) => {
+                const data = snapshot.val();
+                queue = data ? Object.values(data).sort((a, b) => a.joinTime - b.joinTime) : [];
+                updateDisplay();
+                
+                // Si no hay nadie en turno pero hay gente esperando, iniciar turno
+                if (!currentTimer && queue.some(item => item.status === 'esperando')) {
+                    startNextTurn();
+                }
+            });
+
+            // Listener para el temporizador con manejo de concurrencia
+            timerRef.on('value', (snapshot) => {
+                const timerData = snapshot.val();
+                
+                // Evitar actualizaciones innecesarias
+                if (JSON.stringify(currentTimer) !== JSON.stringify(timerData)) {
+                    currentTimer = timerData;
+                    syncTimer();
+                    updateDisplay();
+                }
+            });
         }
 
         // Generar ID único para el usuario
         function generateUserId() {
             return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        }
-
-        // Inicializar la aplicación
-        function initApp() {
-            updateCurrentTime();
-            setInterval(updateCurrentTime, 1000);
-            
-            setupFirebaseListeners();
-            showNotification(`¡Bienvenido ${currentUser}!`, 'success');
-            
-            // Verificar horario de atención
-            checkBusinessHours();
-            setInterval(checkBusinessHours, 60000);
-            
-            // Configurar event listeners para los botones
-            document.getElementById('joinQueueBtn').addEventListener('click', joinQueue);
-            document.getElementById('leaveQueueBtn').addEventListener('click', leaveQueue);
-            document.getElementById('pauseBtn').addEventListener('click', pauseTimer);
-            document.getElementById('resumeBtn').addEventListener('click', resumeTimer);
         }
 
         // Función para limpieza al cerrar
@@ -743,45 +852,6 @@
                 joinBtn.disabled = false;
                 joinBtn.textContent = '🚀 Unirse a la Cola';
             }
-        }
-
-        // Configurar listeners de Firebase con sincronización mejorada
-        function setupFirebaseListeners() {
-            // Monitorear conexión
-            connectedRef.on('value', (snapshot) => {
-                isConnected = snapshot.val();
-                updateConnectionStatus();
-                
-                // Si se recupera la conexión, resincronizar todo
-                if (isConnected) {
-                    syncTimer();
-                    updateDisplay();
-                }
-            });
-
-            // Listener optimizado para la cola (ordenado por tiempo de llegada)
-            queueRef.orderByChild('joinTime').on('value', (snapshot) => {
-                const data = snapshot.val();
-                queue = data ? Object.values(data).sort((a, b) => a.joinTime - b.joinTime) : [];
-                updateDisplay();
-                
-                // Si no hay nadie en turno pero hay gente esperando, iniciar turno
-                if (!currentTimer && queue.some(item => item.status === 'esperando')) {
-                    startNextTurn();
-                }
-            });
-
-            // Listener para el temporizador con manejo de concurrencia
-            timerRef.on('value', (snapshot) => {
-                const timerData = snapshot.val();
-                
-                // Evitar actualizaciones innecesarias
-                if (JSON.stringify(currentTimer) !== JSON.stringify(timerData)) {
-                    currentTimer = timerData;
-                    syncTimer();
-                    updateDisplay();
-                }
-            });
         }
 
         // Actualizar estado de conexión
@@ -1228,6 +1298,17 @@
             setTimeout(() => {
                 notification.classList.remove('show');
             }, 3000);
+        }
+
+        // Mostrar pantalla de error
+        function showErrorScreen(message) {
+            document.getElementById('mainContainer').innerHTML = `
+                <div class="error-container">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                    <button onclick="window.location.reload()">Reintentar</button>
+                </div>
+            `;
         }
     </script>
 </body>
