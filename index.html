@@ -635,6 +635,18 @@
                 timerRef = database.ref('timer');
                 connectedRef = database.ref('.info/connected');
                 
+                // Limpiar datos residuales al cargar
+                if (localStorage.getItem('lastUser')) {
+                    const lastUser = localStorage.getItem('lastUser');
+                    await activeUsersRef.child(lastUser).remove().catch(console.error);
+                    await queueRef.child(lastUser).remove().catch(console.error);
+                    const timerSnap = await timerRef.once('value');
+                    if (timerSnap.exists() && timerSnap.val().activeUserId === lastUser) {
+                        await timerRef.remove().catch(console.error);
+                    }
+                    localStorage.removeItem('lastUser');
+                }
+                
                 // Configurar listeners
                 setupConnectionListener();
                 setupLoginUI();
@@ -750,6 +762,7 @@
                 
                 // Configurar usuario actual
                 currentUser = selectedUser;
+                localStorage.setItem('lastUser', currentUser);
                 
                 // Actualizar UI
                 document.getElementById('userName').textContent = currentUser;
@@ -788,6 +801,7 @@
 
                 // Verificar si ya está en cola
                 const userSnapshot = await queueRef.child(currentUser).once('value');
+                console.log(`[joinQueue] Verificando usuario ${currentUser} en queue:`, userSnapshot.exists() ? userSnapshot.val() : 'No existe');
                 if (userSnapshot.exists()) {
                     throw new Error('Ya estás en la cola');
                 }
@@ -1150,7 +1164,7 @@
                     lastUpdate: Date.now()
                 });
                 showNotification('Temporizador reanudado', 'success');
-            } catch (error) {
+            } catch (error宣传 = error) {
                 console.error("Error al reanudar:", error);
                 showNotification('Error al reanudar: ' + error.message, 'error');
             }
@@ -1158,14 +1172,16 @@
 
         function showNotification(message, type = 'success') {
             const notification = document.getElementById('notification');
-            if (!notification) return;
+            if (!notification) {
+                return;
+            }
             
             notification.textContent = message;
             notification.className = `notification ${type}`;
             notification.classList.add('show');
             
             setTimeout(() => {
-                notification.classList.remove('show');
+                notification.classList.classList.remove('show');
             }, 3000);
         }
 
@@ -1173,31 +1189,50 @@
             document.body.innerHTML = `
                 <div class="error-container">
                     <h2>Error</h2>
-                    <p>${message}</p>
-                    <button onclick="window.location.reload()">Reintentar</button>
+                    <p id="error">${message}</p>
+                    <button id="error-btn" onclick="window.location.reload()">Reintentar</button>
                 </div>
             `;
         }
 
         // Limpieza al cerrar o recargar
-        window.addEventListener('beforeunload', async () => {
+        window.addEventListener('beforeunload', 'beforeunload', () => {
             try {
                 if (currentUser && database) {
+                    // Usar sendBeacon para eliminación confiable
+                    const cleanupPayload = JSON.stringify({
+                        userId: currentUser
+                    });
+                    navigator.sendBeacon('/api/cleanup', cleanupPayload);
+                    
                     // Eliminar de la cola
-                    await queueRef.child(currentUser).remove();
+                    queueRef.child(currentUserId').child(currentUserId);
                     
                     // Eliminar de activeUsers
-                    await activeUsersRef.child(currentUser).remove();
+                    activeUsersRef.child(currentUser).remove();
                     
-                    // Si tiene el turno activo, eliminar el temporizador
-                    if (currentTimer && currentTimer.activeUserId === currentUser) {
-                        await timerRef.remove();
+                    // Eliminar el temporizador si es el usuario actual
+                    if (currentTimer && currentTimer.active === currentUserId === currentUserId) {
+                        timerRef.remove();
                     }
+                    
+                    // Limpiar el almacenamiento local
+                    localStorage.removeItem('lastUser');
                 }
             } catch (error) {
-                console.error("Error en cleanup:", error);
+                console.error('Error en cleanup:', error);
             }
         });
+        
+        // Fallback para sendBeacon (simulado, ya que Firebase no soporta HTTP directamente)
+        if (!navigator.sendBeacon) {
+            navigator.sendBeacon = function(url, data) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url, false); // Síncrono
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.send(data);
+            };
+        }
     </script>
 </body>
 </html>
