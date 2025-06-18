@@ -1179,10 +1179,10 @@
             `;
         }
 
-        // Limpieza al cerrar
+        // Limpieza al cerrar o recargar
         window.addEventListener('beforeunload', async () => {
             try {
-                if (currentUser) {
+                if (currentUser && database) {
                     // Verificar estado en la cola
                     const userSnapshot = await queueRef.child(currentUser).once('value');
                     if (userSnapshot.exists()) {
