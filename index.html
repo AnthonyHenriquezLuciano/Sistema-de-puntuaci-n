@@ -769,7 +769,7 @@
                 
                 // Configurar usuario actual
                 currentUser = selectedUser;
-                currentUserId = `user_${authUser.uid}`;
+                currentUserId = authUser.uid;;
                 
                 // Actualizar UI
                 document.getElementById('userName').textContent = currentUser;
@@ -822,14 +822,13 @@
                     return;
                 }
 
-                const newGestor = {
-                    userId: currentUserId,
-                    user: currentUser,
-                    joinTime: Date.now(),
-                    status: 'esperando',
-                    id: Date.now()
-                };
-
+const newGestor = {
+  userId: String(currentUserId),    // Asegura que es string
+  user: String(currentUser),       // Asegura que es string
+  joinTime: Number(Date.now()),    // Asegura que es número
+  status: 'esperando',             // Valor fijo que cumple con las opciones
+  id: Number(Date.now())           // Asegura que es número
+};
                 await queueRef.child(currentUserId).set(newGestor);
                 showNotification('Te has unido a la cola exitosamente', 'success');
                 
