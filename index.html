@@ -560,6 +560,7 @@
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
     <script>
         // CONFIGURACIÓN DE FIREBASE
@@ -577,10 +578,12 @@
         // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        const auth = firebase.auth();
 
         // Variables globales
         let currentUser = '';
         let currentUserId = '';
+        let authUserId = '';
         let queue = [];
         let currentTimer = null;
         let timerInterval = null;
@@ -597,6 +600,7 @@
         ];
 
         // Referencias de Firebase
+        const activeUsersRef = database.ref('activeUsers');
         const queueRef = database.ref('queue');
         const timerRef = database.ref('timer');
         const connectedRef = database.ref('.info/connected');
@@ -629,7 +633,7 @@
         });
 
         // Manejar inicio de sesión
-        function handleLogin() {
+        async function handleLogin() {
             const userSelect = document.getElementById('userSelect');
             const selectedUser = userSelect.value;
             const userError = document.getElementById('userError');
@@ -640,35 +644,41 @@
                 return;
             }
             
-            // Verificar si el usuario está en la lista predefinida
-            if (!predefinedUsers.includes(selectedUser)) {
-                userError.textContent = 'Usuario no autorizado';
+            try {
+                // Autenticación anónima
+                const userCredential = await auth.signInAnonymously();
+                authUserId = userCredential.user.uid;
+
+                // Verificar si el usuario ya está activo
+                const snapshot = await activeUsersRef.child(selectedUser).once('value');
+                if (snapshot.exists()) {
+                    userError.textContent = 'Este usuario ya está en uso';
+                    userError.style.display = 'block';
+                    await auth.signOut();
+                    return;
+                }
+
+                // Reservar el usuario
+                await activeUsersRef.child(selectedUser).set(authUserId);
+
+                currentUser = selectedUser;
+                currentUserId = generateUserId();
+                isLoggedIn = true;
+
+                document.getElementById('userName').textContent = currentUser;
+                document.getElementById('loginModal').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'block';
+
+                initApp();
+            } catch (error) {
+                console.error('Error en login:', error);
+                userError.textContent = 'Error al iniciar sesión';
                 userError.style.display = 'block';
-                return;
+                
+                if (error.code === 'PERMISSION_DENIED') {
+                    userError.textContent = 'Este usuario ya está en uso en otro dispositivo';
+                }
             }
-
-            // Verificar si el usuario ya está en la cola (activo o esperando)
-            const userInQueue = queue.find(item => 
-                item.user === selectedUser && 
-                item.status !== 'completado'
-            );
-            
-            if (userInQueue) {
-                userError.textContent = 'Este usuario ya está en la cola';
-                userError.style.display = 'block';
-                return;
-            }
-
-            userError.style.display = 'none';
-            currentUser = selectedUser;
-            currentUserId = generateUserId();
-            isLoggedIn = true;
-
-            document.getElementById('userName').textContent = currentUser;
-            document.getElementById('loginModal').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-
-            initApp();
         }
 
         // Generar ID único para el usuario
@@ -686,7 +696,7 @@
             
             // Verificar horario de atención
             checkBusinessHours();
-            setInterval(checkBusinessHours, 60000); // Verificar cada minuto
+            setInterval(checkBusinessHours, 60000);
             
             // Configurar event listeners para los botones
             document.getElementById('joinQueueBtn').addEventListener('click', joinQueue);
@@ -694,6 +704,27 @@
             document.getElementById('pauseBtn').addEventListener('click', pauseTimer);
             document.getElementById('resumeBtn').addEventListener('click', resumeTimer);
         }
+
+        // Función para limpieza al cerrar
+        async function cleanupOnExit() {
+            try {
+                if (authUserId && currentUser) {
+                    await activeUsersRef.child(currentUser).remove();
+                }
+                if (currentUserId) {
+                    await queueRef.child(currentUserId).remove();
+                }
+                if (auth.currentUser) {
+                    await auth.signOut();
+                }
+            } catch (error) {
+                console.error('Error en cleanup:', error);
+            }
+        }
+
+        // Configurar eventos de cierre
+        window.addEventListener('beforeunload', cleanupOnExit);
+        window.addEventListener('pagehide', cleanupOnExit);
 
         // Verificar horario de atención (hasta las 5:00 PM)
         function checkBusinessHours() {
@@ -743,10 +774,13 @@
                 updateDisplay();
             });
 
-            // Cleanup al desconectar
-            window.addEventListener('beforeunload', () => {
-                if (currentUserId) {
-                    database.ref(`queue/${currentUserId}`).remove();
+            // Monitorear usuario activo
+            activeUsersRef.child(currentUser).on('value', (snapshot) => {
+                if (!snapshot.exists() || snapshot.val() !== authUserId) {
+                    showNotification('Tu sesión ha sido cerrada porque iniciaron sesión desde otro dispositivo', 'error');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
                 }
             });
         }
@@ -792,40 +826,44 @@
                 return;
             }
 
-            const userInQueue = queue.find(item => item.userId === currentUserId);
-            if (userInQueue) {
-                showNotification('Ya estás en la cola', 'warning');
-                return;
-            }
-
-            // Verificar si el nombre de usuario ya está siendo usado
-            const userNameInUse = queue.some(item => item.user === currentUser && item.status !== 'completado');
-            if (userNameInUse) {
-                showNotification('Este usuario ya está en la cola', 'error');
-                return;
-            }
-
-            const newGestor = {
-                userId: currentUserId,
-                user: currentUser,
-                joinTime: Date.now(),
-                status: 'esperando',
-                id: Date.now()
-            };
-
             try {
-                await database.ref(`queue/${currentUserId}`).set(newGestor);
+                // Verificar que todavía somos el usuario activo
+                const snapshot = await activeUsersRef.child(currentUser).once('value');
+                if (!snapshot.exists() || snapshot.val() !== authUserId) {
+                    showNotification('Tu sesión ha expirado', 'error');
+                    await cleanupOnExit();
+                    window.location.reload();
+                    return;
+                }
+
+                const userInQueue = queue.find(item => item.userId === currentUserId);
+                if (userInQueue) {
+                    showNotification('Ya estás en la cola', 'warning');
+                    return;
+                }
+
+                const newGestor = {
+                    userId: currentUserId,
+                    user: currentUser,
+                    joinTime: Date.now(),
+                    status: 'esperando',
+                    id: Date.now()
+                };
+
+                await queueRef.child(currentUserId).set(newGestor);
                 showNotification('Te has unido a la cola exitosamente', 'success');
                 
                 // Si es el primero en la cola, iniciar su turno
-                setTimeout(() => {
-                    if (queue.length === 1 && !currentTimer) {
-                        startNextTurn();
-                    }
-                }, 500);
+                if (queue.length === 0 && !currentTimer) {
+                    await startNextTurn();
+                }
             } catch (error) {
                 console.error('Error al unirse a la cola:', error);
                 showNotification('Error al unirse a la cola', 'error');
+                
+                if (error.code === 'PERMISSION_DENIED') {
+                    showNotification('No tienes permiso para unirte a la cola', 'error');
+                }
             }
         }
 
@@ -836,24 +874,33 @@
                 return;
             }
 
-            const userInQueue = queue.find(item => item.userId === currentUserId);
-            if (!userInQueue) {
-                showNotification('No estás en la cola', 'warning');
-                return;
-            }
-
             try {
+                // Verificar que todavía somos el usuario activo
+                const snapshot = await activeUsersRef.child(currentUser).once('value');
+                if (!snapshot.exists() || snapshot.val() !== authUserId) {
+                    showNotification('Tu sesión ha expirado', 'error');
+                    await cleanupOnExit();
+                    window.location.reload();
+                    return;
+                }
+
+                const userInQueue = queue.find(item => item.userId === currentUserId);
+                if (!userInQueue) {
+                    showNotification('No estás en la cola', 'warning');
+                    return;
+                }
+
                 // Si es el turno actual, finalizarlo primero
                 if (currentTimer && currentTimer.activeUserId === currentUserId) {
                     // 1. Actualizar estado a completado
-                    await database.ref(`queue/${currentUserId}/status`).set('completado');
+                    await queueRef.child(currentUserId).child('status').set('completado');
                     
                     // 2. Eliminar el temporizador
                     await timerRef.remove();
                     
                     // 3. Eliminar de la cola después de un breve retraso
                     setTimeout(async () => {
-                        await database.ref(`queue/${currentUserId}`).remove();
+                        await queueRef.child(currentUserId).remove();
                     }, 1000);
                     
                     // 4. Iniciar siguiente turno inmediatamente
@@ -862,7 +909,7 @@
                     showNotification('Has salido del turno activo', 'success');
                 } else {
                     // Si solo está en la cola esperando
-                    await database.ref(`queue/${currentUserId}`).remove();
+                    await queueRef.child(currentUserId).remove();
                     showNotification('Has salido de la cola', 'success');
                 }
             } catch (error) {
@@ -873,27 +920,28 @@
 
         // Iniciar siguiente turno
         async function startNextTurn() {
-            // Obtener el primer usuario en espera (excluyendo completados)
-            const nextUser = queue.find(g => g.status === 'esperando');
-            
-            if (!nextUser) {
-                await timerRef.remove();
-                showNotification('No hay más usuarios en la cola', 'info');
-                return;
-            }
-
-            const timerData = {
-                activeUserId: nextUser.userId,
-                activeUser: nextUser.user,
-                startTime: Date.now(),
-                remainingSeconds: 15 * 60,
-                isPaused: false,
-                lastUpdate: Date.now()
-            };
-
             try {
+                // Obtener el primer usuario en espera (excluyendo completados)
+                const waitingUsers = queue.filter(g => g.status === 'esperando');
+                
+                if (waitingUsers.length === 0) {
+                    await timerRef.remove();
+                    showNotification('No hay más usuarios en la cola', 'info');
+                    return;
+                }
+
+                const nextUser = waitingUsers[0];
+                const timerData = {
+                    activeUserId: nextUser.userId,
+                    activeUser: nextUser.user,
+                    startTime: Date.now(),
+                    remainingSeconds: 15 * 60,
+                    isPaused: false,
+                    lastUpdate: Date.now()
+                };
+
                 // Actualizar estado del usuario a activo
-                await database.ref(`queue/${nextUser.userId}/status`).set('activo');
+                await queueRef.child(nextUser.userId).child('status').set('activo');
                 // Iniciar el temporizador
                 await timerRef.set(timerData);
                 showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
@@ -915,7 +963,7 @@
 
             try {
                 // 1. Marcar turno actual como completado
-                await database.ref(`queue/${currentTimer.activeUserId}/status`).set('completado');
+                await queueRef.child(currentTimer.activeUserId).child('status').set('completado');
                 
                 // 2. Eliminar el temporizador
                 await timerRef.remove();
@@ -970,11 +1018,20 @@
         async function pauseTimer() {
             if (!currentTimer || currentTimer.activeUserId !== currentUserId) return;
 
-            const now = Date.now();
-            const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
-            const remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
-
             try {
+                // Verificar que todavía somos el usuario activo
+                const snapshot = await activeUsersRef.child(currentUser).once('value');
+                if (!snapshot.exists() || snapshot.val() !== authUserId) {
+                    showNotification('Tu sesión ha expirado', 'error');
+                    await cleanupOnExit();
+                    window.location.reload();
+                    return;
+                }
+
+                const now = Date.now();
+                const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
+                const remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
+
                 await timerRef.update({
                     isPaused: true,
                     remainingSeconds: remainingSeconds,
@@ -983,6 +1040,7 @@
                 showNotification('Temporizador pausado', 'warning');
             } catch (error) {
                 console.error('Error al pausar:', error);
+                showNotification('Error al pausar', 'error');
             }
         }
 
@@ -991,6 +1049,15 @@
             if (!currentTimer || currentTimer.activeUserId !== currentUserId) return;
 
             try {
+                // Verificar que todavía somos el usuario activo
+                const snapshot = await activeUsersRef.child(currentUser).once('value');
+                if (!snapshot.exists() || snapshot.val() !== authUserId) {
+                    showNotification('Tu sesión ha expirado', 'error');
+                    await cleanupOnExit();
+                    window.location.reload();
+                    return;
+                }
+
                 await timerRef.update({
                     isPaused: false,
                     lastUpdate: Date.now()
@@ -998,6 +1065,7 @@
                 showNotification('Temporizador reanudado', 'success');
             } catch (error) {
                 console.error('Error al reanudar:', error);
+                showNotification('Error al reanudar', 'error');
             }
         }
 
@@ -1139,14 +1207,6 @@
                 notification.classList.remove('show');
             }, 3000);
         }
-
-        // Limpiar al cerrar
-        window.addEventListener('beforeunload', () => {
-            clearInterval(timerInterval);
-            if (currentUserId) {
-                database.ref(`queue/${currentUserId}`).remove();
-            }
-        });
     </script>
 </body>
 </html>
