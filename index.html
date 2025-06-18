@@ -778,20 +778,61 @@
                 if (!currentUser) throw new Error('No estás autenticado');
                 if (new Date().getHours() >= 17) throw new Error('Fuera de horario (hasta 5:00 PM)');
 
+                // Verificar si el usuario ya está en la cola
                 const userSnapshot = await queueRef.child(currentUser).once('value');
                 if (userSnapshot.exists()) {
                     const userData = userSnapshot.val();
-                    if (userData.status === 'esperando') throw new Error('Ya estás en la cola');
-                    if (userData.status === 'completado') await queueRef.child(currentUser).remove();
+                    if (userData.status === 'esperando' || userData.status === 'activo') {
+                        throw new Error('Ya estás en la cola');
+                    }
+                    if (userData.status === 'completado') {
+                        await queueRef.child(currentUser).remove();
+                    }
                 }
 
-                await queueRef.child(currentUser).set({
-                    userId: currentUser,
-                    user: currentUser,
-                    joinTime: Date.now(),
-                    status: 'esperando'
-                });
-                showNotification('Te has unido a la cola', 'success');
+                // Verificar si la cola está vacía y no hay turno activo
+                const [queueSnapshot, turnoSnapshot] = await Promise.all([
+                    queueRef.once('value'),
+                    turnoActualRef.once('value')
+                ]);
+                const isQueueEmpty = !queueSnapshot.exists() || Object.keys(queueSnapshot.val() || {}).length === 0;
+                const noActiveTurn = !turnoSnapshot.exists();
+
+                if (isQueueEmpty && noActiveTurn) {
+                    // Asignar turno directamente
+                    const result = await turnoActualRef.transaction(current => {
+                        if (current) return undefined;
+                        return {
+                            userId: currentUser,
+                            user: currentUser,
+                            startTime: Date.now(),
+                            remainingSeconds: TURN_DURATION,
+                            isPaused: false,
+                            lastUpdate: Date.now()
+                        };
+                    });
+
+                    if (result.committed) {
+                        await queueRef.child(currentUser).set({
+                            userId: currentUser,
+                            user: currentUser,
+                            joinTime: Date.now(),
+                            status: 'activo'
+                        });
+                        showNotification('Turno iniciado inmediatamente', 'success');
+                    } else {
+                        throw new Error('No se pudo asignar el turno');
+                    }
+                } else {
+                    // Agregar a la cola en espera
+                    await queueRef.child(currentUser).set({
+                        userId: currentUser,
+                        user: currentUser,
+                        joinTime: Date.now(),
+                        status: 'esperando'
+                    });
+                    showNotification('Te has unido a la cola', 'success');
+                }
             } catch (error) {
                 console.error('Error al unirse a la cola:', error);
                 showNotification(`Error: ${error.message}`, 'error');
