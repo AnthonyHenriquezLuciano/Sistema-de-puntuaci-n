@@ -857,11 +857,11 @@
                 // Eliminar el temporizador
                 await timerRef.remove();
                 
-                // Eliminar usuario completado de la cola después de un breve retraso
-                setTimeout(async () => {
-                    await queueRef.child(currentTimer.activeUserId).remove();
-                    await startNextTurn();
-                }, 500);
+                // Eliminar usuario de la cola inmediatamente
+                await queueRef.child(currentTimer.activeUserId).remove();
+                
+                // Iniciar siguiente turno
+                await startNextTurn();
                 
             } catch (error) {
                 console.error('Error al completar turno:', error);
@@ -1183,15 +1183,8 @@
         window.addEventListener('beforeunload', async () => {
             try {
                 if (currentUser && database) {
-                    // Verificar estado en la cola
-                    const userSnapshot = await queueRef.child(currentUser).once('value');
-                    if (userSnapshot.exists()) {
-                        const userData = userSnapshot.val();
-                        // Eliminar de la cola si está en espera o activo
-                        if (userData.status === 'esperando' || userData.status === 'activo') {
-                            await queueRef.child(currentUser).remove();
-                        }
-                    }
+                    // Eliminar de la cola
+                    await queueRef.child(currentUser).remove();
                     
                     // Eliminar de activeUsers
                     await activeUsersRef.child(currentUser).remove();
