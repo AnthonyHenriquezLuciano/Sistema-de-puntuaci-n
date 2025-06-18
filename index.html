@@ -635,1125 +635,6 @@
                 timerRef = database.ref('timer');
                 connectedRef = database.ref('.info/connected');
                 
-                // Configurar listeners
-                setupConnectionListener();
-                setupLoginUI();
-                
-                // Configurar temporizador de hora actual
-                updateCurrentTime();
-                setInterval(updateCurrentTime, 1000);
-                
-            } catch (error) {
-                console.error("Error inicializando la aplicación:", error.message);
-                showErrorScreen(`Error al inicializar la aplicación: ${error.message}. Por favor, verifica tu conexión a internet y recarga la página.`);
-            }
-        }
-
-        function setupConnectionListener() {
-            connectedRef.on('value', (snap) => {
-                isConnected = snap.val();
-                updateConnectionStatus();
-                
-                if (isConnected && currentUser) {
-                    setupDataListeners();
-                }
-            });
-        }
-
-        function setupDataListeners() {
-            // Listener para la cola en tiempo real
-            queueRef.orderByChild('joinTime').on('value', (snapshot) => {
-                const data = snapshot.val();
-                queue = data ? Object.values(data).sort((a, b) => a.joinTime - b.joinTime) : [];
-                updateDisplay();
-                
-                // Iniciar turno si no hay nadie activo pero hay esperando
-                if (!currentTimer && queue.some(u => u.status === 'esperando')) {
-                    startNextTurn();
-                }
-            }, (error) => {
-                console.error("Error en listener de cola:", error);
-                showNotification(`Error al cargar la cola: ${error.message}`, 'error');
-            });
-
-            // Listener para el timer en tiempo real
-            timerRef.on('value', (snapshot) => {
-                const timerData = snapshot.val();
-                if (JSON.stringify(currentTimer) !== JSON.stringify(timerData)) {
-                    currentTimer = timerData;
-                    syncTimer();
-                    updateDisplay();
-                }
-            }, (error) => {
-                console.error("Error en listener de timer:", error);
-                showNotification(`Error al cargar el temporizador: ${error.message}`, 'error');
-            });
-        }
-
-        function setupLoginUI() {
-            const userSelect = document.getElementById('userSelect');
-            userSelect.innerHTML = '';
-            
-            // Agregar opción por defecto
-            const defaultOption = document.createElement('option');
-            defaultOption.value = '';
-            defaultOption.textContent = 'Selecciona tu usuario';
-            defaultOption.selected = true;
-            defaultOption.disabled = true;
-            userSelect.appendChild(defaultOption);
-            
-            // Agregar usuarios predefinidos
-            PREDEFINED_USERS.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user;
-                option.textContent = user;
-                userSelect.appendChild(option);
-            });
-            
-            // Mostrar modal de login
-            document.getElementById('loginModal').style.display = 'flex';
-            
-            // Configurar evento de login
-            document.getElementById('loginButton').addEventListener('click', handleLoginClick);
-        }
-
-        async function handleLoginClick() {
-            const selectedUser = document.getElementById('userSelect').value;
-            const userError = document.getElementById('userError');
-            userError.style.display = 'none';
-            
-            if (!selectedUser) {
-                userError.textContent = 'Por favor selecciona un usuario';
-                userError.style.display = 'block';
-                return;
-            }
-            
-            try {
-                await handleLogin(selectedUser);
-            } catch (error) {
-                userError.textContent = error.message;
-                userError.style.display = 'block';
-                console.error("Error en login:", error);
-            }
-        }
-
-        async function handleLogin(selectedUser) {
-            try {
-                if (!isConnected) throw new Error('No hay conexión con el servidor');
-
-                // Verificar usuario único
-                const userSnapshot = await activeUsersRef.child(selectedUser).once('value');
-                if (userSnapshot.exists()) throw new Error('Este usuario ya está en uso');
-                
-                // Registrar usuario activo
-                await activeUsersRef.child(selectedUser).set(selectedUser);
-                
-                // Configurar usuario actual
-                currentUser = selectedUser;
-                
-                // Actualizar UI
-                document.getElementById('userName').textContent = currentUser;
-                document.getElementById('loginModal').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-                
-                // Configurar listeners y controles
-                setupDataListeners();
-                setupActionButtons();
-                checkBusinessHours();
-                
-                showNotification(`¡Bienvenido ${currentUser}!`, 'success');
-            } catch (error) {
-                console.error("Error en login:", error);
-                if (currentUser) await activeUsersRef.child(currentUser).remove().catch(console.error);
-                throw error;
-            }
-        }
-
-        function setupActionButtons() {
-            document.getElementById('joinQueueBtn').addEventListener('click', joinQueue);
-            document.getElementById('leaveQueueBtn').addEventListener('click', leaveQueue);
-            document.getElementById('pauseBtn').addEventListener('click', pauseTimer);
-            document.getElementById('resumeBtn').addEventListener('click', resumeTimer);
-        }
-
-        async function joinQueue() {
-            try {
-                if (!isConnected) throw new Error('No hay conexión');
-                if (!currentUser) throw new Error('No estás autenticado');
-
-                // Verificar horario
-                if (new Date().getHours() >= 17) {
-                    throw new Error('No puedes unirte después de las 5:00 PM');
-                }
-
-                // Verificar si ya está en cola
-                const userSnapshot = await queueRef.child(currentUser).once('value');
-                if (userSnapshot.exists()) {
-                    throw new Error('Ya estás en la cola');
-                }
-
-                // Crear nuevo registro
-                const newGestor = {
-                    userId: currentUser,
-                    user: currentUser,
-                    joinTime: Date.now(),
-                    status: 'esperando',
-                    id: Date.now()
-                };
-
-                await queueRef.child(currentUser).set(newGestor);
-                showNotification('Te has unido a la cola exitosamente', 'success');
-                
-                // Iniciar turno si es el primero
-                if (queue.length === 0) await startNextTurn();
-                
-            } catch (error) {
-                console.error('Error al unirse a la cola:', error);
-                showNotification(error.message, 'error');
-            }
-        }
-
-        async function leaveQueue() {
-            try {
-                if (!currentUser) throw new Error('No estás autenticado');
-                if (!isConnected) throw new Error('No hay conexión con el servidor');
-
-                // Verificar si el usuario está en la cola
-                const userSnapshot = await queueRef.child(currentUser).once('value');
-                if (!userSnapshot.exists()) {
-                    showNotification('No estás en la cola', 'warning');
-                    return;
-                }
-
-                // Si es el turno actual, eliminar el temporizador
-                if (currentTimer && currentTimer.activeUserId === currentUser) {
-                    await timerRef.remove();
-                }
-
-                // Eliminar de la cola
-                await queueRef.child(currentUser).remove();
-                showNotification('Has salido de la cola', 'success');
-                
-                // Iniciar siguiente turno si era el activo
-                if (currentTimer && currentTimer.activeUserId === currentUser) {
-                    await startNextTurn();
-                }
-                
-                // Actualizar UI
-                updateButtons();
-            } catch (error) {
-                console.error('Error al salir de la cola:', error);
-                showNotification(`Error al salir de la cola: ${error.message}`, 'error');
-            }
-        }
-
-        async function completeTurn() {
-            try {
-                if (!currentTimer) return;
-
-                // Marcar como completado
-                await queueRef.child(currentTimer.activeUserId).update({ status: 'completado' });
-                
-                // Eliminar el temporizador
-                await timerRef.remove();
-                
-                // Eliminar usuario de la cola inmediatamente
-                await queueRef.child(currentTimer.activeUserId).remove();
-                
-                // Iniciar siguiente turno
-                await startNextTurn();
-                
-            } catch (error) {
-                console.error('Error al completar turno:', error);
-                showNotification('Error al completar turno: ' + error.message, 'error');
-            }
-        }
-
-        async function startNextTurn() {
-            try {
-                // Obtener siguiente usuario en espera
-                const waitingUsers = queue
-                    .filter(g => g.status === 'esperando')
-                    .sort((a, b) => a.joinTime - b.joinTime);
-                
-                if (waitingUsers.length === 0) {
-                    await timerRef.remove();
-                    return;
-                }
-
-                const nextUser = waitingUsers[0];
-                
-                // Verificación doble del estado
-                const userSnapshot = await queueRef.child(nextUser.userId).once('value');
-                if (!userSnapshot.exists() || userSnapshot.val().status !== 'esperando') {
-                    return;
-                }
-                
-                // Actualizar estado del usuario
-                await queueRef.child(nextUser.userId).update({ status: 'activo' });
-                
-                // Crear nuevo temporizador
-                await timerRef.set({
-                    activeUserId: nextUser.userId,
-                    activeUser: nextUser.user,
-                    startTime: Date.now(),
-                    remainingSeconds: 15 * 60,
-                    isPaused: false,
-                    lastUpdate: Date.now()
-                });
-                
-                showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
-            } catch (error) {
-                console.error('Error al iniciar turno:', error);
-                showNotification('Error al iniciar turno: ' + error.message, 'error');
-            }
-        }
-
-        function syncTimer() {
-            if (!currentTimer) {
-                clearCurrentTurn();
-                return;
-            }
-
-            clearInterval(timerInterval);
-
-            if (currentTimer.isPaused) {
-                updateTimerDisplay(currentTimer.remainingSeconds);
-                return;
-            }
-
-            const now = Date.now();
-            const elapsed = Math.floor((now - currentTimer.lastUpdate) / 1000);
-            let remainingSeconds = Math.max(0, currentTimer.remainingSeconds - elapsed);
-
-            updateTimerDisplay(remainingSeconds);
-
-            if (remainingSeconds <= 0) {
-                completeTurn();
-                return;
-            }
-
-            timerInterval = setInterval(() => {
-                remainingSeconds--;
-                updateTimerDisplay(remainingSeconds);
-
-                if (remainingSeconds % 15 === 0 && currentTimer.activeUserId === currentUser) {
-                    timerRef.update({
-                        remainingSeconds: remainingSeconds,
-                        lastUpdate: Date.now()
-                    }).catch(error => {
-                        console.error('Error al actualizar temporizador:', error);
-                    });
-                }
-
-                if (remainingSeconds <= 0) {
-                    clearInterval(timerInterval);
-                    completeTurn();
-                }
-            }, 1000);
-        }
-
-        function clearCurrentTurn() {
-            clearInterval(timerInterval);
-            updateTimerDisplay(15 * 60);
-            document.getElementById('currentTurn').textContent = 'Ninguno';
-        }
-
-        function updateTimerDisplay(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            document.getElementById('timerDisplay').textContent = 
-                `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-        }
-
-        function updateDisplay() {
-            updateQueueDisplay();
-            updateStats();
-            updateButtons();
-        }
-
-        function updateQueueDisplay() {
-            const queueList = document.getElementById('queueList');
-            
-            if (queue.length === 0) {
-                queueList.innerHTML = `
-                    <div class="empty-queue">
-                        <div class="empty-queue-icon">📝</div>
-                        <div>No hay gestores en cola</div>
-                        <div style="font-size: 0.9em; margin-top: 10px;">¡Sé el primero en unirte!</div>
-                    </div>
-                `;
-                return;
-            }
-
-            let html = '';
-            let waitingPosition = 1;
-            
-            queue.forEach((gestor) => {
-                const isActive = currentTimer && currentTimer.activeUserId === gestor.userId;
-                const position = gestor.status === 'esperando' ? waitingPosition++ : '';
-                
-                let statusText = '';
-                switch(gestor.status) {
-                    case 'esperando': statusText = '⏳ Esperando turno'; break;
-                    case 'activo': 
-                        statusText = currentTimer?.isPaused ? '⏸️ En pausa' : '🟢 Turno activo'; 
-                        break;
-                    case 'completado': statusText = '✅ Completado'; break;
-                }
-
-                const timeInfo = gestor.status === 'completado' ?
-                    `Completado: ${new Date(gestor.joinTime).toLocaleTimeString()}` :
-                    `Ingresó: ${new Date(gestor.joinTime).toLocaleTimeString()}`;
-
-                html += `
-                    <div class="queue-item ${gestor.status === 'activo' ? 'active' : 
-                                            gestor.status === 'esperando' ? 'waiting' : 'completed'}">
-                        ${position ? `<div class="queue-position">${position}</div>` : ''}
-                        <div class="gestores-name">${gestor.user}</div>
-                        <div class="gestores-status">${statusText}</div>
-                        <div class="gestores-time">${timeInfo}</div>
-                    </div>
-                `;
-            });
-            
-            queueList.innerHTML = html;
-        }
-
-        function updateStats() {
-            const waitingCount = queue.filter(g => g.status === 'esperando').length;
-            document.getElementById('queueCount').textContent = waitingCount;
-            
-            const currentTurnUser = currentTimer ? currentTimer.activeUser : 'Ninguno';
-            document.getElementById('currentTurn').textContent = currentTurnUser;
-            
-            const userInQueue = queue.find(g => g.userId === currentUser);
-            if (userInQueue) {
-                if (userInQueue.status === 'activo') {
-                    document.getElementById('userPosition').textContent = 'En turno';
-                    document.getElementById('estimatedTime').textContent = 'Ahora';
-                } else if (userInQueue.status === 'esperando') {
-                    const waitingUsers = queue.filter(g => g.status === 'esperando');
-                    const position = waitingUsers.findIndex(g => g.userId === currentUser) + 1;
-                    const estimatedMinutes = (position - 1) * 15;
-                    document.getElementById('userPosition').textContent = `#${position}`;
-                    document.getElementById('estimatedTime').textContent = 
-                        estimatedMinutes > 0 ? `~${estimatedMinutes} min` : 'Próximo';
-                } else {
-                    document.getElementById('userPosition').textContent = 'Completado';
-                    document.getElementById('estimatedTime').textContent = '--';
-                }
-            } else {
-                document.getElementById('userPosition').textContent = 'No en cola';
-                document.getElementById('estimatedTime').textContent = '--';
-            }
-        }
-
-        function updateButtons() {
-            const userInQueue = queue.find(g => g.userId === currentUser);
-            const joinBtn = document.getElementById('joinQueueBtn');
-            const leaveBtn = document.getElementById('leaveQueueBtn');
-            const pauseBtn = document.getElementById('pauseBtn');
-            const resumeBtn = document.getElementById('resumeBtn');
-
-            // Botones de cola
-            if (userInQueue && userInQueue.status !== 'completado') {
-                joinBtn.style.display = 'none';
-                leaveBtn.style.display = 'block';
-                leaveBtn.disabled = false;
-            } else {
-                joinBtn.style.display = 'block';
-                leaveBtn.style.display = 'none';
-                leaveBtn.disabled = true;
-            }
-
-            // Botones de temporizador
-            const isUserTurn = currentTimer && currentTimer.activeUserId === currentUser;
-            pauseBtn.disabled = !isUserTurn || (currentTimer?.isPaused) || !isConnected;
-            resumeBtn.disabled = !isUserTurn || !currentTimer?.isPaused || !isConnected;
-        }
-
-        function updateConnectionStatus() {
-            const statusElement = document.getElementById('connectionStatus');
-            if (!statusElement) return;
-            
-            if (isConnected) {
-                statusElement.textContent = '🟢 Conectado';
-                statusElement.className = 'connection-status connected';
-            } else {
-                statusElement.textContent = '🔴 Desconectado';
-                statusElement.className = 'connection-status disconnected';
-            }
-        }
-
-        function updateCurrentTime() {
-            const timeElement = document.getElementById('currentTime');
-            if (!timeElement) return;
-            
-            const now = new Date();
-            timeElement.textContent = now.toLocaleString('es-ES', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-        }
-
-        function checkBusinessHours() {
-            const now = new Date();
-            const hours = now.getHours();
-            const timeInfoElement = document.getElementById('timeInfo');
-            const joinBtn = document.getElementById('joinQueueBtn');
-            
-            if (!timeInfoElement || !joinBtn) return;
-            
-            if (hours >= 17) {
-                timeInfoElement.style.display = 'block';
-                joinBtn.disabled = true;
-                joinBtn.textContent = 'Fuera de horario';
-            } else {
-                timeInfoElement.style.display = 'none';
-                joinBtn.disabled = false;
-                joinBtn.textContent = '🚀 Unir<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos - Gestores</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h1 {
-            color: #2c3e50;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .user-info {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        .user-welcome {
-            font-size: 1.2em;
-            color: #2c3e50;
-        }
-
-        .user-name {
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .current-time {
-            font-size: 1.1em;
-            color: #666;
-        }
-
-        .connection-status {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
-        }
-
-        .connection-status.connected {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .connection-status.disconnected {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 400px;
-            gap: 30px;
-        }
-
-        .queue-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .controls-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .section-title {
-            font-size: 1.8em;
-            color: #2c3e50;
-            margin-bottom: 25px;
-            text-align: center;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
-        }
-
-        .join-queue-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-size: 1.2em;
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 25px;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
-        }
-
-        .join-queue-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
-        }
-
-        .join-queue-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .leave-queue-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #dc3545, #c82333);
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 25px;
-            transition: all 0.3s ease;
-        }
-
-        .leave-queue-btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .queue-list {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .queue-item {
-            background: #f8f9fa;
-            border-left: 5px solid #dee2e6;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .queue-item.active {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border-left-color: #fff;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-            transform: scale(1.02);
-        }
-
-        .queue-item.waiting {
-            border-left-color: #ffc107;
-            background: #fff3cd;
-        }
-
-        .queue-item.completed {
-            border-left-color: #6c757d;
-            background: #e2e3e5;
-            opacity: 0.7;
-        }
-
-        .queue-position {
-            position: absolute;
-            top: -10px;
-            left: -10px;
-            background: #667eea;
-            color: white;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .queue-item.active .queue-position {
-            background: #fff;
-            color: #28a745;
-        }
-
-        .gestores-name {
-            font-size: 1.3em;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .gestores-status {
-            font-size: 1em;
-            margin-bottom: 8px;
-        }
-
-        .gestores-time {
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-
-        .timer-display {
-            background: #2c3e50;
-            color: white;
-            border-radius: 15px;
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.2);
-        }
-
-        .timer-time {
-            font-size: 3.5em;
-            font-weight: bold;
-            margin-bottom: 10px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .timer-label {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .timer-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .timer-btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .timer-btn.pause {
-            background: linear-gradient(135deg, #ffc107, #ffca2c);
-            color: #212529;
-        }
-
-        .timer-btn.resume {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-        }
-
-        .timer-btn:disabled {
-            background: #6c757d;
-            color: #adb5bd;
-            cursor: not-allowed;
-        }
-
-        .timer-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-        }
-
-        .stats-section {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 25px;
-        }
-
-        .stats-title {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 15px;
-        }
-
-        .stats-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
-
-        .stats-item:last-child {
-            border-bottom: none;
-        }
-
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #28a745;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            transform: translateX(400px);
-            opacity: 0;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .notification.show {
-            transform: translateX(0);
-            opacity: 1;
-        }
-
-        .notification.warning {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .notification.error {
-            background: #dc3545;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            font-size: 1.2em;
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 1024px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            
-            .container {
-                padding: 10px;
-            }
-            
-            .header h1 {
-                font-size: 2em;
-            }
-            
-            .timer-time {
-                font-size: 2.5em;
-            }
-        }
-
-        .empty-queue {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            font-size: 1.2em;
-        }
-
-        .empty-queue-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-
-        .login-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .login-content {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            text-align: center;
-        }
-
-        .login-content h2 {
-            margin-bottom: 20px;
-            color: #2c3e50;
-        }
-
-        .login-input {
-            width: 100%;
-            padding: 12px 15px;
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1em;
-        }
-
-        .login-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .time-info {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 0.9em;
-            display: none;
-        }
-
-        .error-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            max-width: 500px;
-            margin: 50px auto;
-        }
-
-        .error-container button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <!-- Modal de inicio de sesión -->
-    <div class="login-modal" id="loginModal">
-        <div class="login-content">
-            <h2>Iniciar sesión</h2>
-            <p>Selecciona tu nombre de usuario</p>
-            <select class="login-input" id="userSelect">
-                <!-- Opciones se llenarán dinámicamente -->
-            </select>
-            <div id="userError" style="color: #dc3545; margin-bottom: 15px; display: none;"></div>
-            <button class="login-btn" id="loginButton">Ingresar</button>
-        </div>
-    </div>
-
-    <div class="container" id="mainContainer" style="display: none;">
-        <div class="header">
-            <h1>🎯 Sistema de Turnos</h1>
-            <p>Gestión inteligente de turnos - 15 minutos por sesión</p>
-        </div>
-
-        <div class="user-info">
-            <div class="user-welcome">
-                👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
-                <div class="connection-status" id="connectionStatus">Conectando...</div>
-            </div>
-            <div>
-                <div class="current-time" id="currentTime"></div>
-            </div>
-        </div>
-
-        <div class="time-info" id="timeInfo">
-            El sistema de turnos solo está disponible hasta las 5:00 PM. No podrás unirte a la cola después de este horario.
-        </div>
-
-        <div class="main-content">
-            <div class="queue-section">
-                <h2 class="section-title">📋 Cola de Turnos</h2>
-                <button class="join-queue-btn" id="joinQueueBtn">
-                    🚀 Unirse a la Cola
-                </button>
-                <button class="leave-queue-btn" id="leaveQueueBtn" style="display: none;">
-                    ❌ Salir de la Cola
-                </button>
-                <div class="queue-list" id="queueList">
-                    <div class="loading">
-                        <div class="loading-spinner"></div>
-                        <div>Conectando con Firebase...</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="controls-section">
-                <h2 class="section-title">⏰ Control de Tiempo</h2>
-                
-                <div class="timer-display">
-                    <div class="timer-time" id="timerDisplay">15:00</div>
-                    <div class="timer-label">Tiempo restante</div>
-                </div>
-
-                <div class="timer-controls">
-                    <button class="timer-btn pause" id="pauseBtn" disabled>
-                        ⏸️ Pausar
-                    </button>
-                    <button class="timer-btn resume" id="resumeBtn" disabled>
-                        ▶️ Reanudar
-                    </button>
-                </div>
-
-                <div class="stats-section">
-                    <div class="stats-title">📊 Estadísticas</div>
-                    <div class="stats-item">
-                        <span>Gestores en cola:</span>
-                        <span id="queueCount">0</span>
-                    </div>
-                    <div class="stats-item">
-                        <span>Turno actual:</span>
-                        <span id="currentTurn">Ninguno</span>
-                    </div>
-                    <div class="stats-item">
-                        <span>Tu posición:</span>
-                        <span id="userPosition">No en cola</span>
-                    </div>
-                    <div class="stats-item">
-                        <span>Tiempo estimado:</span>
-                        <span id="estimatedTime">--</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="notification" id="notification"></div>
-
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-
-    <script>
-        // CONFIGURACIÓN DE FIREBASE
-        const firebaseConfig = {
-            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-            authDomain: "sistema-turnos-gestores.firebaseapp.com",
-            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-            projectId: "sistema-turnos-gestores",
-            storageBucket: "sistema-turnos-gestores.firebasestorage.app",
-            messagingSenderId: "322320112231",
-            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-            measurementId: "G-GV4JVLKEFY"
-        };
-
-        // Variables globales
-        let currentUser = null;
-        let queue = [];
-        let currentTimer = null;
-        let timerInterval = null;
-        let isConnected = false;
-        
-        // Lista de usuarios predefinidos
-        const PREDEFINED_USERS = [
-            "Ana Pérez",
-            "Carlos Gómez",
-            "María Rodríguez",
-            "Juan López",
-            "Laura Martínez"
-        ];
-
-        // Referencias de Firebase
-        let database, activeUsersRef, queueRef, timerRef, connectedRef;
-
-        // Inicialización de la aplicación
-        document.addEventListener('DOMContentLoaded', async () => {
-            await initializeApp();
-        });
-        
-        async function initializeApp() {
-            try {
-                // Verificar que los SDKs de Firebase están cargados
-                if (!window.firebase || !window.firebase.app || !window.firebase.database) {
-                    throw new Error('Los SDKs de Firebase no se cargaron correctamente. Verifica las URLs de los scripts.');
-                }
-
-                // Inicializar Firebase
-                firebase.initializeApp(firebaseConfig);
-                database = firebase.database();
-                
-                // Configurar referencias
-                activeUsersRef = database.ref('activeUsers');
-                queueRef = database.ref('queue');
-                timerRef = database.ref('timer');
-                connectedRef = database.ref('.info/connected');
-                
                 // Limpieza inicial para estados residuales
                 await cleanupResidualState();
                 
@@ -1776,13 +657,13 @@
                 if (localStorage.getItem('lastUser')) {
                     const lastUser = localStorage.getItem('lastUser');
                     await Promise.all([
-                        activeUsersRef.child(lastUser).remove(),
-                        queueRef.child(lastUser).remove(),
+                        activeUsersRef.child(lastUser).remove().catch(() => {}),
+                        queueRef.child(lastUser).remove().catch(() => {}),
                         timerRef.once('value').then(snapshot => {
-                            if (snapshot.exists() && snapshot.val().activeUserId === lastUser) {
+                            if (snapshot.exists() && snapshot.val()?.activeUserId === lastUser) {
                                 return timerRef.remove();
                             }
-                        })
+                        }).catch(() => {})
                     ]);
                     localStorage.removeItem('lastUser');
                 }
@@ -1958,7 +839,7 @@
                 
             } catch (error) {
                 console.error('Error al unirse a la cola:', error);
-                showNotification(error.message, 'error');
+                showNotification(`Error al unirse a la cola: ${error.message}`, 'error');
             }
         }
 
@@ -1976,7 +857,9 @@
 
                 // Si es el turno actual, eliminar el temporizador
                 if (currentTimer && currentTimer.activeUserId === currentUser) {
-                    await timerRef.remove();
+                    await timerRef.remove().catch(error => {
+                        console.error("Error al eliminar temporizador en leaveQueue:", error);
+                    });
                 }
 
                 // Eliminar de la cola
@@ -1998,23 +881,43 @@
 
         async function completeTurn() {
             try {
-                if (!currentTimer) return;
+                // Validar que existe un temporizador activo
+                if (!currentTimer || !currentTimer.activeUserId) {
+                    console.warn("No hay temporizador activo para completar turno");
+                    return;
+                }
+
+                const activeUserId = currentTimer.activeUserId;
+
+                // Verificar que el usuario existe en la cola
+                const userSnapshot = await queueRef.child(activeUserId).once('value');
+                if (!userSnapshot.exists()) {
+                    console.warn(`Usuario ${activeUserId} no está en la cola`);
+                    await timerRef.remove().catch(() => {});
+                    await startNextTurn();
+                    return;
+                }
 
                 // Marcar como completado
-                await queueRef.child(currentTimer.activeUserId).update({ status: 'completado' });
+                await queueRef.child(activeUserId).update({ 
+                    status: 'completado',
+                    completionTime: Date.now() // Agregar timestamp de completado
+                });
                 
                 // Eliminar el temporizador
                 await timerRef.remove();
                 
-                // Eliminar usuario de la cola inmediatamente
-                await queueRef.child(currentTimer.activeUserId).remove();
+                // Eliminar usuario de la cola
+                await queueRef.child(activeUserId).remove();
                 
                 // Iniciar siguiente turno
                 await startNextTurn();
                 
+                showNotification(`Turno de ${activeUserId} completado`, 'success');
+                
             } catch (error) {
                 console.error('Error al completar turno:', error);
-                showNotification('Error al completar turno: ' + error.message, 'error');
+                showNotification(`Error al completar turno: ${error.message || 'Error desconocido'}`, 'error');
             }
         }
 
@@ -2026,7 +929,9 @@
                     .sort((a, b) => a.joinTime - b.joinTime);
                 
                 if (waitingUsers.length === 0) {
-                    await timerRef.remove();
+                    await timerRef.remove().catch(() => {});
+                    currentTimer = null;
+                    updateDisplay();
                     return;
                 }
 
@@ -2035,6 +940,7 @@
                 // Verificación doble del estado
                 const userSnapshot = await queueRef.child(nextUser.userId).once('value');
                 if (!userSnapshot.exists() || userSnapshot.val().status !== 'esperando') {
+                    console.warn(`Usuario ${nextUser.userId} no está en estado esperando`);
                     return;
                 }
                 
@@ -2042,19 +948,21 @@
                 await queueRef.child(nextUser.userId).update({ status: 'activo' });
                 
                 // Crear nuevo temporizador
-                await timerRef.set({
+                const newTimer = {
                     activeUserId: nextUser.userId,
                     activeUser: nextUser.user,
                     startTime: Date.now(),
                     remainingSeconds: 15 * 60,
                     isPaused: false,
                     lastUpdate: Date.now()
-                });
+                };
+                
+                await timerRef.set(newTimer);
                 
                 showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
             } catch (error) {
                 console.error('Error al iniciar turno:', error);
-                showNotification('Error al iniciar turno: ' + error.message, 'error');
+                showNotification(`Error al iniciar turno: ${error.message || 'Error desconocido'}`, 'error');
             }
         }
 
@@ -2086,7 +994,7 @@
                 remainingSeconds--;
                 updateTimerDisplay(remainingSeconds);
 
-                if (remainingSeconds % 15 === 0 && currentTimer.activeUserId === currentUser) {
+                if (remainingSeconds % 15 === 0 && currentTimer?.activeUserId === currentUser) {
                     timerRef.update({
                         remainingSeconds: remainingSeconds,
                         lastUpdate: Date.now()
@@ -2152,7 +1060,7 @@
                 }
 
                 const timeInfo = gestor.status === 'completado' ?
-                    `Completado: ${new Date(gestor.joinTime).toLocaleTimeString()}` :
+                    `Completado: ${new Date(gestor.completionTime || gestor.joinTime).toLocaleTimeString()}` :
                     `Ingresó: ${new Date(gestor.joinTime).toLocaleTimeString()}`;
 
                 html += `
@@ -2286,7 +1194,7 @@
                 showNotification('Temporizador pausado', 'warning');
             } catch (error) {
                 console.error("Error al pausar:", error);
-                showNotification('Error al pausar: ' + error.message, 'error');
+                showNotification(`Error al pausar: ${error.message || 'Error desconocido'}`, 'error');
             }
         }
 
@@ -2301,7 +1209,7 @@
                 showNotification('Temporizador reanudado', 'success');
             } catch (error) {
                 console.error("Error al reanudar:", error);
-                showNotification('Error al reanudar: ' + error.message, 'error');
+                showNotification(`Error al reanudar: ${error.message || 'Error desconocido'}`, 'error');
             }
         }
 
