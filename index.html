@@ -614,28 +614,19 @@
         // Referencias de Firebase
         let database, auth, activeUsersRef, queueRef, timerRef, connectedRef;
 
-        // Inicialización de la aplicación
-        document.addEventListener('DOMContentLoaded', () => {
-            // Verificar elementos esenciales del DOM
-            const requiredElements = [
-                'loginModal', 'mainContainer', 'userSelect', 
-                'loginButton', 'userName', 'queueList',
-                'joinQueueBtn', 'leaveQueueBtn', 'timerDisplay',
-                'pauseBtn', 'resumeBtn', 'currentTime',
-                'connectionStatus', 'notification'
-            ];
-
-            for (const elementId of requiredElements) {
-                if (!document.getElementById(elementId)) {
-                    console.error(`Elemento crítico no encontrado: ${elementId}`);
-                    showErrorScreen(`Error de configuración (${elementId})`);
-                    return;
-                }
+        // Función de verificación de autenticación
+        function verifyAuth() {
+            if (!authUser || !authUser.uid) {
+                throw new Error('Usuario no autenticado correctamente');
             }
-
+            return true;
+        }
+        
+        // Inicialización de la aplicación (actualizada)
+        document.addEventListener('DOMContentLoaded', () => {
             initializeApp();
         });
-
+        
         async function initializeApp() {
             try {
                 // Inicializar Firebase
@@ -649,10 +640,8 @@
                 timerRef = database.ref('timer');
                 connectedRef = database.ref('.info/connected');
                 
-                // Configurar listeners de conexión
+                // Configurar listeners
                 setupConnectionListener();
-                
-                // Configurar interfaz de usuario
                 setupLoginUI();
                 
                 // Configurar temporizador de hora actual
@@ -749,49 +738,43 @@
 
         async function handleLogin(selectedUser) {
             try {
-                // Verificar conexión
-                if (!isConnected) {
-                    throw new Error('No hay conexión con el servidor');
-                }
+                if (!isConnected) throw new Error('No hay conexión con el servidor');
 
-                // Autenticación anónima
+                // Autenticación anónima mejorada
                 const userCredential = await auth.signInAnonymously();
                 authUser = userCredential.user;
                 
-                // Verificar si el usuario ya está activo
+                if (!authUser?.uid) throw new Error('Autenticación fallida');
+
+                // Verificar usuario único
                 const userSnapshot = await activeUsersRef.child(selectedUser).once('value');
-                if (userSnapshot.exists()) {
-                    throw new Error('Este usuario ya está en uso');
-                }
+                if (userSnapshot.exists()) throw new Error('Este usuario ya está en uso');
                 
                 // Registrar usuario activo
                 await activeUsersRef.child(selectedUser).set(authUser.uid);
                 
-                // Configurar usuario actual
+                // Configurar usuario actual (usando UID directo)
                 currentUser = selectedUser;
-                currentUserId = authUser.uid;;
+                currentUserId = authUser.uid;
                 
                 // Actualizar UI
                 document.getElementById('userName').textContent = currentUser;
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
                 
-                // Configurar listeners de datos
+                // Configurar listeners y controles
                 setupDataListeners();
-                
-                // Configurar botones
                 setupActionButtons();
-                
-                // Verificar horario de atención
                 checkBusinessHours();
-                setInterval(checkBusinessHours, 60000);
                 
                 showNotification(`¡Bienvenido ${currentUser}!`, 'success');
             } catch (error) {
-                // Limpiar en caso de error
+                console.error("Error en login:", error);
+                // Limpieza en caso de error
                 if (authUser) await auth.signOut();
                 if (currentUser) await activeUsersRef.child(currentUser).remove().catch(console.error);
-                throw error;
+                document.getElementById('userError').textContent = error.message;
+                document.getElementById('userError').style.display = 'block';
             }
         }
 
@@ -802,43 +785,40 @@
             document.getElementById('resumeBtn').addEventListener('click', resumeTimer);
         }
 
+        // Función joinQueue actualizada
         async function joinQueue() {
-            if (!isConnected) {
-                showNotification('No hay conexión con el servidor', 'error');
-                return;
-            }
-
-            // Verificar horario de atención
-            const now = new Date();
-            if (now.getHours() >= 17) {
-                showNotification('No puedes unirte a la cola después de las 5:00 PM', 'error');
-                return;
-            }
-
             try {
-                const userInQueue = queue.find(item => item.userId === currentUserId);
-                if (userInQueue) {
-                    showNotification('Ya estás en la cola', 'warning');
-                    return;
+                verifyAuth();
+                if (!isConnected) throw new Error('No hay conexión');
+
+                // Verificar horario
+                if (new Date().getHours() >= 17) {
+                    throw new Error('No puedes unirte después de las 5:00 PM');
                 }
 
-const newGestor = {
-  userId: String(currentUserId),    // Asegura que es string
-  user: String(currentUser),       // Asegura que es string
-  joinTime: Number(Date.now()),    // Asegura que es número
-  status: 'esperando',             // Valor fijo que cumple con las opciones
-  id: Number(Date.now())           // Asegura que es número
-};
+                // Verificar si ya está en cola
+                if (queue.some(item => item.userId === currentUserId)) {
+                    throw new Error('Ya estás en la cola');
+                }
+
+                // Crear nuevo registro (con tipos de datos explícitos)
+                const newGestor = {
+                    userId: currentUserId,
+                    user: String(currentUser),
+                    joinTime: Number(Date.now()),
+                    status: 'esperando',
+                    id: Number(Date.now())
+                };
+
                 await queueRef.child(currentUserId).set(newGestor);
                 showNotification('Te has unido a la cola exitosamente', 'success');
                 
-                // Si es el primero en la cola, iniciar su turno inmediatamente
-                if (queue.length === 0) {
-                    await startNextTurn();
-                }
+                // Iniciar turno si es el primero
+                if (queue.length === 0) await startNextTurn();
+                
             } catch (error) {
                 console.error('Error al unirse a la cola:', error);
-                showNotification('Error al unirse a la cola', 'error');
+                showNotification(error.message, 'error');
             }
         }
 
@@ -870,9 +850,9 @@ const newGestor = {
             }
         }
 
+        // Función startNextTurn actualizada (sin transacción problemática)
         async function startNextTurn() {
             try {
-                // Obtener primer usuario en espera
                 const waitingUsers = queue.filter(g => g.status === 'esperando');
                 if (waitingUsers.length === 0) {
                     await timerRef.remove();
@@ -881,30 +861,21 @@ const newGestor = {
 
                 const nextUser = waitingUsers[0];
                 
-                // Transacción para asegurar consistencia
-                await database.ref().transaction(async (currentData) => {
-                    if (!currentData) return null;
-                    
-                    // Verificar que el usuario sigue esperando
-                    if (currentData.queue && currentData.queue[nextUser.userId] && 
-                        currentData.queue[nextUser.userId].status === 'esperando') {
-                        
-                        // Actualizar estado del usuario
-                        currentData.queue[nextUser.userId].status = 'activo';
-                        
-                        // Crear nuevo temporizador
-                        currentData.timer = {
-                            activeUserId: nextUser.userId,
-                            activeUser: nextUser.user,
-                            startTime: Date.now(),
-                            remainingSeconds: 15 * 60,
-                            isPaused: false,
-                            lastUpdate: Date.now()
-                        };
-                        
-                        return currentData;
-                    }
-                    return null;
+                // Verificación doble del estado
+                const userSnapshot = await queueRef.child(nextUser.userId).once('value');
+                if (!userSnapshot.exists() || userSnapshot.val().status !== 'esperando') return;
+                
+                // Actualizar estado del usuario
+                await queueRef.child(nextUser.userId).update({ status: 'activo' });
+                
+                // Crear nuevo temporizador
+                await timerRef.set({
+                    activeUserId: nextUser.userId,
+                    activeUser: nextUser.user,
+                    startTime: Date.now(),
+                    remainingSeconds: 15 * 60,
+                    isPaused: false,
+                    lastUpdate: Date.now()
                 });
                 
                 showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
@@ -1207,18 +1178,12 @@ const newGestor = {
             `;
         }
 
-        // Limpieza al cerrar
+        // Función mejorada para limpieza al cerrar
         window.addEventListener('beforeunload', async () => {
             try {
-                if (currentUser) {
-                    await activeUsersRef.child(currentUser).remove();
-                }
-                if (currentUserId) {
-                    await queueRef.child(currentUserId).remove();
-                }
-                if (authUser) {
-                    await auth.signOut();
-                }
+                if (currentUser) await activeUsersRef.child(currentUser).remove();
+                if (currentUserId) await queueRef.child(currentUserId).remove();
+                if (authUser) await auth.signOut();
             } catch (error) {
                 console.error("Error en cleanup:", error);
             }
