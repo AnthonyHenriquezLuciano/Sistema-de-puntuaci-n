@@ -446,6 +446,22 @@
             box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
         }
 
+        .leave-queue-btn {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .leave-queue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -531,7 +547,7 @@
                                 <th>Usuario</th>
                                 <th>Hora de Ingreso</th>
                                 <th>Estado</th>
-                                <th>Tiempo Activo Restante</th>
+                                <th>Acción</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -569,20 +585,18 @@
         let sessionCheckInterval = null;
         let isConnected = false;
         let isLoggingIn = false;
-        let hasBeenNotified = false; // Bandera para controlar notificaciones de turno
+        let hasBeenNotified = false;
+        let globalTimerInterval = null;
 
         // Constantes de configuración
         const PREDEFINED_USERS = ["Ana Pérez", "Carlos Gómez", "María Rodríguez", "Juan López", "Laura Martínez"];
-        const HEARTBEAT_INTERVAL = 30000; // 30 segundos
-        const SESSION_CHECK_INTERVAL = 10000; // 10 segundos
-        const MAX_HEARTBEAT_RETRIES = 3; // Máximo de reintentos para heartbeat
-        const TURN_TIME = 15 * 60; // 15 minutos en segundos
+        const HEARTBEAT_INTERVAL = 30000;
+        const SESSION_CHECK_INTERVAL = 10000;
+        const MAX_HEARTBEAT_RETRIES = 3;
+        const TURN_TIME = 15 * 60;
 
         // Referencias de Firebase
         let database, activeSessionsRef, connectedRef, queueRef, activeUserRef;
-
-        // Variables para el sistema de turnos
-        let timerInterval = null;
 
         // Rutas de Firebase para la cola
         const QUEUE_PATH = 'queueSystem/queue';
@@ -603,17 +617,16 @@
                 queueRef = database.ref(QUEUE_PATH);
                 activeUserRef = database.ref(ACTIVE_USER_PATH);
 
-                // Limpiar sesiones residuales
                 await cleanupResidualSessions();
                 
-                // Configurar listeners
                 setupConnectionListener();
                 setupLoginUI();
                 updateCurrentTime();
                 setInterval(updateCurrentTime, 1000);
                 
-                // Configurar sistema de turnos
                 setupQueueSystem();
+                setupGlobalTimer();
+                requestNotificationPermission();
 
                 showNotification('Sistema inicializado correctamente', 'success');
             } catch (error) {
@@ -622,7 +635,34 @@
             }
         }
 
-        // ---- SISTEMA DE TURNOS ----
+        // Solicitar permisos para notificaciones
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                console.warn("El navegador no soporta notificaciones.");
+                return;
+            }
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    console.log("Permiso de notificaciones concedido.");
+                } else {
+                    console.warn("Permiso de notificaciones denegado.");
+                    showNotification("Notificaciones desactivadas. No recibirás alertas de turno.", 'warning');
+                }
+            }).catch(error => {
+                console.error("Error solicitando permisos de notificación:", error);
+            });
+        }
+
+        function showSystemNotification(message) {
+            if (Notification.permission === "granted") {
+                new Notification("Sistema de Turnos", {
+                    body: message,
+                    icon: 'https://www.gstatic.com/devrel-devsite/prod/v8e6b1a6b4e8f3b3f3b3f3b3f3b3f3b3f3b3f3b3f3b3f3b3f3b3f3b3f3b3f3b3/images/favicon.png',
+                    requireInteraction: true
+                });
+            }
+        }
+
         function setupQueueSystem() {
             setupQueueListeners();
             const joinQueueBtn = document.getElementById('joinQueueBtn');
@@ -639,14 +679,12 @@
                 return;
             }
             try {
-                // Verificar si el usuario es el activo
                 const activeUserSnapshot = await activeUserRef.once('value');
                 if (activeUserSnapshot.exists() && activeUserSnapshot.val().userId === currentUser) {
                     showNotification('No puedes unirte a la cola mientras estás activo', 'warning');
                     return;
                 }
 
-                // Verificar si el usuario ya está en la cola
                 const queueSnapshot = await queueRef.once('value');
                 const queue = queueSnapshot.val() || {};
                 if (Object.values(queue).some(q => q.userId === currentUser)) {
@@ -654,7 +692,6 @@
                     return;
                 }
 
-                // Unirse a la cola
                 const joinedAt = Date.now();
                 const newRef = queueRef.push();
                 await newRef.set({
@@ -663,13 +700,26 @@
                 });
                 showNotification('Te uniste a la cola', 'success');
 
-                // Si no hay usuario activo, activar el siguiente
                 if (!activeUserSnapshot.exists()) {
                     await activateNextInQueue();
                 }
             } catch (error) {
                 console.error('Error al unirse a la cola:', error);
                 showNotification('Error al unirse a la cola', 'error');
+            }
+        }
+
+        async function leaveQueue(queueKey) {
+            if (!currentUser || !queueKey) {
+                showNotification('Error: No estás en la cola', 'error');
+                return;
+            }
+            try {
+                await queueRef.child(queueKey).remove();
+                showNotification('Has salido de la cola', 'success');
+            } catch (error) {
+                console.error('Error al salir de la cola:', error);
+                showNotification('Error al salir de la cola', 'error');
             }
         }
 
@@ -704,26 +754,96 @@
             activeUserRef.on('value', snap => {
                 const data = snap.val();
                 renderActiveUser(data);
-                if (data && data.userId === currentUser) {
-                    if (!hasBeenNotified) {
-                        showNotification('¡Es tu turno!', 'success');
-                        hasBeenNotified = true;
-                    }
-                    setupTimer(data);
-                } else {
-                    hasBeenNotified = false; // Resetear la bandera cuando no es el usuario activo
-                    stopTimer();
+                if (data && data.userId === currentUser && !hasBeenNotified) {
+                    showNotification('¡Es tu turno!', 'success');
+                    showSystemNotification('¡Es tu turno! Por favor, regresa al sistema de turnos.');
+                    hasBeenNotified = true;
+                } else if (!data || data.userId !== currentUser) {
+                    hasBeenNotified = false;
                 }
-                renderQueue(null, data); // Actualizar la cola con el tiempo activo
             }, error => {
                 console.error('Error en listener de activeUser:', error);
             });
 
             queueRef.on('value', snap => {
-                renderQueue(snap.val());
+                const queueData = snap.val();
+                console.log('Datos de cola recibidos:', queueData);
+                renderQueue(queueData);
             }, error => {
                 console.error('Error en listener de queue:', error);
             });
+        }
+
+        function setupGlobalTimer() {
+            stopGlobalTimer();
+            activeUserRef.on('value', snap => {
+                const data = snap.val();
+                if (data && !data.isPaused) {
+                    startGlobalTimer(data);
+                } else {
+                    stopGlobalTimer();
+                    updateTimerDisplay(TURN_TIME);
+                }
+            });
+        }
+
+        function startGlobalTimer(data) {
+            stopGlobalTimer();
+            let remaining = data.remainingTime;
+            let lastTick = Date.now();
+            const timerText = document.getElementById('timerText');
+            const timerProgress = document.getElementById('timerProgress');
+            if (!timerText || !timerProgress) return;
+
+            const totalDash = 408.4;
+            updateTimerDisplay(remaining);
+
+            globalTimerInterval = setInterval(() => {
+                let now = Date.now();
+                let diff = Math.floor((now - lastTick) / 1000);
+                if (diff > 0) {
+                    remaining -= diff;
+                    lastTick = now;
+                    if (remaining <= 0) {
+                        clearInterval(globalTimerInterval);
+                        globalTimerInterval = null;
+                        updateTimerDisplay(0);
+                        activeUserRef.once('value').then(snap => {
+                            if (snap.exists()) {
+                                activeUserRef.remove().then(activateNextInQueue).catch(error => {
+                                    console.error('Error al finalizar turno:', error);
+                                });
+                            }
+                        });
+                    } else {
+                        activeUserRef.once('value').then(snap => {
+                            if (snap.exists()) {
+                                activeUserRef.update({ remainingTime: remaining }).catch(error => {
+                                    console.error('Error al actualizar tiempo restante:', error);
+                                });
+                                updateTimerDisplay(remaining);
+                            }
+                        });
+                    }
+                }
+            }, 1000);
+        }
+
+        function stopGlobalTimer() {
+            if (globalTimerInterval) {
+                clearInterval(globalTimerInterval);
+                globalTimerInterval = null;
+            }
+        }
+
+        function updateTimerDisplay(remaining) {
+            const timerText = document.getElementById('timerText');
+            const timerProgress = document.getElementById('timerProgress');
+            if (timerText && timerProgress) {
+                timerText.innerHTML = formatTime(Math.max(0, Math.floor(remaining)));
+                const totalDash = 408.4;
+                timerProgress.style.strokeDashoffset = totalDash * (1 - remaining / TURN_TIME);
+            }
         }
 
         function renderActiveUser(data) {
@@ -737,7 +857,6 @@
             if (!data) {
                 activeUserInfo.innerHTML = 'Nadie activo';
                 timerControls.innerHTML = '';
-                stopTimer();
                 return;
             }
 
@@ -756,92 +875,37 @@
             }
         }
 
-        function renderQueue(queue, activeUserData = null) {
+        function renderQueue(queue) {
             const queueList = document.getElementById('queueList').querySelector('tbody');
             if (!queueList) {
                 console.error('Elemento queueList tbody no encontrado');
                 return;
             }
 
-            queueList.innerHTML = '';
-            if (!queue) return;
+            queueList.innerHTML = ''; // Clear the table body
+            if (!queue || Object.keys(queue).length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="5">No hay usuarios en espera</td>';
+                queueList.appendChild(tr);
+                return;
+            }
 
-            const activeTime = activeUserData && !activeUserData.isPaused
-                ? formatTime(Math.max(0, Math.floor(activeUserData.remainingTime)))
-                : activeUserData ? 'Pausado' : 'Nadie activo';
-
-            Object.values(queue).sort((a, b) => a.joinedAt - b.joinedAt)
-                .forEach((q, i) => {
+            Object.entries(queue).sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
+                .forEach(([key, q], i) => {
                     const tr = document.createElement('tr');
                     if (q.userId === currentUser) tr.classList.add('current-user');
+                    const leaveButton = q.userId === currentUser 
+                        ? `<button class="leave-queue-btn" onclick="leaveQueue('${key}')">🚪 Salir</button>`
+                        : '';
                     tr.innerHTML = `
                         <td>${i + 1}</td>
                         <td>${q.userId}</td>
                         <td>${new Date(q.joinedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                         <td>${q.userId === currentUser ? 'En espera (Tú)' : 'En espera'}</td>
-                        <td>${activeTime}</td>
+                        <td>${leaveButton}</td>
                     `;
                     queueList.appendChild(tr);
                 });
-        }
-
-        function setupTimer(data) {
-            stopTimer();
-            let remaining = data.remainingTime;
-            let lastTick = Date.now();
-            const timerText = document.getElementById('timerText');
-            const timerProgress = document.getElementById('timerProgress');
-            if (!timerText || !timerProgress) return;
-
-            const totalDash = 408.4; // Circunferencia del círculo (2 * π * 65)
-            timerText.innerHTML = formatTime(remaining);
-            timerProgress.style.strokeDashoffset = totalDash * (1 - remaining / TURN_TIME);
-
-            if (data.isPaused) return;
-
-            timerInterval = setInterval(() => {
-                let now = Date.now();
-                let diff = Math.floor((now - lastTick) / 1000);
-                if (diff > 0) {
-                    remaining -= diff;
-                    lastTick = now;
-                    if (remaining <= 0) {
-                        clearInterval(timerInterval);
-                        timerText.innerHTML = '00:00';
-                        timerProgress.style.strokeDashoffset = totalDash;
-                        activeUserRef.once('value').then(snap => {
-                            if (snap.exists() && snap.val().userId === currentUser) {
-                                activeUserRef.remove().then(activateNextInQueue).catch(error => {
-                                    console.error('Error al finalizar turno:', error);
-                                });
-                            }
-                        });
-                    } else {
-                        activeUserRef.once('value').then(snap => {
-                            if (snap.exists() && snap.val().userId === currentUser) {
-                                activeUserRef.update({ remainingTime: remaining }).catch(error => {
-                                    console.error('Error al actualizar tiempo restante:', error);
-                                });
-                            }
-                        });
-                        timerText.innerHTML = formatTime(remaining);
-                        timerProgress.style.strokeDashoffset = totalDash * (1 - remaining / TURN_TIME);
-                    }
-                }
-            }, 1000);
-        }
-
-        function stopTimer() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-            const timerText = document.getElementById('timerText');
-            const timerProgress = document.getElementById('timerProgress');
-            if (timerText && timerProgress) {
-                timerText.innerHTML = '15:00';
-                timerProgress.style.strokeDashoffset = 408.4;
-            }
         }
 
         function pauseTimer() {
@@ -873,7 +937,6 @@
         async function cleanupQueueOnLogout() {
             if (!currentUser) return;
             try {
-                // Quitar de la cola si está presente
                 const queueSnapshot = await queueRef.once('value');
                 const queue = queueSnapshot.val() || {};
                 Object.entries(queue).forEach(([key, val]) => {
@@ -883,7 +946,6 @@
                         });
                     }
                 });
-                // Si es el usuario activo, liberar y activar siguiente
                 const activeUserSnapshot = await activeUserRef.once('value');
                 if (activeUserSnapshot.exists() && activeUserSnapshot.val().userId === currentUser) {
                     await activeUserRef.remove();
@@ -894,7 +956,6 @@
             }
         }
 
-        // ---- SISTEMA DE SESIÓN ÚNICA ----
         async function cleanupResidualSessions() {
             try {
                 const lastUser = localStorage.getItem('lastUser');
@@ -1177,7 +1238,7 @@
             currentUser = null;
             sessionId = null;
             sessionStartTime = null;
-            hasBeenNotified = false; // Resetear al cerrar sesión
+            hasBeenNotified = false;
             localStorage.removeItem('lastUser');
             localStorage.removeItem('lastSessionId');
             document.getElementById('mainContainer').style.display = 'none';
