@@ -162,7 +162,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-    <script>
+<script>
     // =================================================================================
     // CONFIGURACIÓN E INICIALIZACIÓN
     // =================================================================================
@@ -281,7 +281,7 @@
             sessionStartTime = Date.now();
 
             document.getElementById('userName').textContent = currentUser.email;
-            document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-ES');
+            document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-DO');
             document.getElementById('loginModal').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
 
@@ -389,7 +389,7 @@
     }
 
     // =================================================================================
-    // LÓGICA DE COLA Y TURNOS
+    // LÓGICA DE COLA Y TURNOS (SECCIÓN CORREGIDA)
     // =================================================================================
     
     function setupQueueSystem() {
@@ -413,7 +413,11 @@
                 joinedAt: firebase.database.ServerValue.TIMESTAMP
             });
             showNotification('Te uniste a la cola.', 'success');
-            if (!activeUserSnap.exists()) await activateNextInQueue();
+            
+            // Si no hay nadie activo, intenta activar al siguiente (que serás tú)
+            if (!activeUserSnap.exists()) {
+                await activateNextInQueue();
+            }
         } catch (error) {
             showNotification(`Error al unirse a la cola: ${error.message}`, 'error');
         }
@@ -430,16 +434,29 @@
     }
     
     async function activateNextInQueue() {
+        // Pre-chequeo: no hacer nada si ya hay alguien activo
         const activeUserSnap = await activeUserRef.once('value');
-        if (activeUserSnap.exists()) return;
-
-        const queueSnap = await queueRef.orderByChild('joinedAt').limitToFirst(1).once('value');
-        if (!queueSnap.exists()) {
-            await activeUserRef.remove();
+        if (activeUserSnap.exists()) {
+            console.log("Intento de activar, pero ya hay un usuario activo.");
             return;
         }
-        const [key, userToActivate] = Object.entries(queueSnap.val())[0];
+
+        // Tomar el primer usuario de la cola por orden de llegada
+        const queueSnap = await queueRef.orderByChild('joinedAt').limitToFirst(1).once('value');
+        if (!queueSnap.exists()) {
+            console.log("No hay nadie en la cola para activar.");
+            return; // La cola está vacía
+        }
+
+        // ¡ESTA ES LA LÓGICA CORREGIDA!
+        // Extraemos la clave (key) y los datos (userToActivate) del primer usuario
+        const queueData = queueSnap.val();
+        const key = Object.keys(queueData)[0];
+        const userToActivate = queueData[key];
         
+        console.log(`Activando al usuario: ${userToActivate.email}`);
+        
+        // Crear el nuevo usuario activo en la base de datos
         await activeUserRef.set({
             userId: userToActivate.userId,
             email: userToActivate.email,
@@ -447,6 +464,8 @@
             remainingTime: TURN_TIME,
             isPaused: false
         });
+        
+        // Eliminar al usuario de la cola de espera
         await queueRef.child(key).remove();
     }
 
@@ -468,11 +487,13 @@
     async function cleanupQueueOnLogout() {
         if (!currentUser) return;
         try {
+            // Salir de la cola de espera si está en ella
             const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value');
             if (queueSnap.exists()) {
                 const queueKey = Object.keys(queueSnap.val())[0];
                 await queueRef.child(queueKey).remove();
             }
+            // Si es el usuario activo, ceder el turno al siguiente
             const activeUserSnap = await activeUserRef.once('value');
             if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
                 await activeUserRef.remove();
@@ -505,6 +526,7 @@
             remaining--;
             if (remaining < 0) {
                 stopGlobalTimer();
+                // Solo el cliente del usuario activo debe finalizar el turno
                 if (activeUserData.userId === currentUser?.uid) {
                     activeUserRef.remove().then(activateNextInQueue);
                 }
@@ -541,7 +563,7 @@
     }
 
     function renderQueue(queueData) {
-        const queueListBody = document.getElementById('queueListBody');
+        const queueListBody = document.querySelector('#queueListBody');
         queueListBody.innerHTML = '';
         if (!queueData) {
             queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>';
@@ -558,7 +580,7 @@
             tr.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${q.email}</td>
-                <td>${new Date(q.joinedAt).toLocaleTimeString('es-ES')}</td>
+                <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td>
                 <td>En espera</td>
                 <td>${q.userId === currentUser?.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${key}')">🚗 Salir</button>`: ''}</td>
             `;
@@ -581,7 +603,7 @@
     }
 
     function updateCurrentTime() {
-        document.getElementById('currentTime').textContent = new Date().toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'medium' });
+        document.getElementById('currentTime').textContent = new Date().toLocaleString('es-DO', { dateStyle: 'full', timeStyle: 'medium' });
     }
 
     function showError(message) {
@@ -614,6 +636,6 @@
     function showErrorScreen(message) {
         document.body.innerHTML = `<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: #f4f4f4; color: #333; text-align: center;"><div style="background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);"><h2>🆘 Error Crítico</h2><p style="margin: 20px 0;">${message}</p><button style="background: #667eea; color: white; padding: 12px 25px; border-radius: 5px; cursor: pointer;" onclick="window.location.reload()">🔄 Recargar</button></div></div>`;
     }
-    </script>
+</script>
 </body>
 </html>
