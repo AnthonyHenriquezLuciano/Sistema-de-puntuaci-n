@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos - Gestores (Sesión Única)</title>
+    <title>Sistema de Turnos - Gestores (Sesión Única con Cola)</title>
     <style>
         * {
             margin: 0;
@@ -289,6 +289,69 @@
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.2); opacity: 0.7; }
         }
+
+        .queue-controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .queue-btn {
+            background: linear-gradient(135deg, #28a745, #218838);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            margin: 0 10px;
+        }
+
+        .queue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .queue-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .queue-status {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .queue-status h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .queue-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .queue-list li {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            color: #666;
+        }
+
+        .queue-list li:first-child {
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .timer {
+            font-size: 1.5em;
+            color: #2c3e50;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -314,7 +377,7 @@
                 <p>• Una sesión activa por usuario</p>
                 <p>• Detección automática de sesiones múltiples</p>
                 <p>• Heartbeat para mantener la conexión</p>
-                <p>• Limpieza automática de sesiones inactivas</p>
+                <p>• Limpieza automática al cerrar sesión</p>
             </div>
         </div>
     </div>
@@ -322,7 +385,7 @@
     <div class="container" id="mainContainer" style="display: none;">
         <div class="header">
             <h1>🎯 Sistema de Turnos</h1>
-            <p>Gestión inteligente con sesión única - Máxima seguridad</p>
+            <p>Gestión inteligente con sesión única y cola - Máxima seguridad</p>
         </div>
 
         <div class="user-info">
@@ -349,12 +412,16 @@
             <p style="text-align: center; color: #666; font-size: 1.1em;">
                 Tu sesión está protegida. Ningún otro dispositivo puede acceder con tu usuario mientras estés conectado.
             </p>
-            <div style="text-align: center; margin-top: 20px;">
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; display: inline-block;">
-                    <p><strong>Usuario:</strong> <span id="displayUserName"></span></p>
-                    <p><strong>Sesión ID:</strong> <span id="displaySessionId"></span></p>
-                    <p><strong>Estado:</strong> <span style="color: #28a745;">🟢 Activo y Seguro</span></p>
-                </div>
+            <div class="queue-controls">
+                <button class="queue-btn" id="joinQueueBtn" onclick="joinQueue()">📋 Unirse a la Cola</button>
+                <button class="queue-btn" id="pauseResumeBtn" onclick="togglePauseResume()" style="display: none;">⏯️ Pausar</button>
+            </div>
+            <div class="timer" id="timerDisplay" style="display: none;">Tiempo restante: <span id="timeRemaining">15:00</span></div>
+            <div class="queue-status">
+                <h3>📋 Estado de la Cola</h3>
+                <p>Usuario Activo: <span id="activeUserDisplay">Ninguno</span></p>
+                <p>Usuarios en espera: <span id="queueCount">0</span></p>
+                <ul class="queue-list" id="queueList"></ul>
             </div>
         </div>
     </div>
@@ -386,15 +453,18 @@
         let sessionCheckInterval = null;
         let isConnected = false;
         let isLoggingIn = false;
+        let timerInterval = null;
+        let timeRemaining = 15 * 60 * 1000; // 15 minutos en milisegundos
 
         // Constantes de configuración
         const PREDEFINED_USERS = ["Ana Pérez", "Carlos Gómez", "María Rodríguez", "Juan López", "Laura Martínez"];
         const HEARTBEAT_INTERVAL = 30000; // 30 segundos
-        const SESSION_TIMEOUT = 300000; // 5 minutos
         const SESSION_CHECK_INTERVAL = 10000; // 10 segundos
+        const MAX_HEARTBEAT_RETRIES = 3; // Máximo de reintentos para heartbeat
+        const TIME_LIMIT = 15 * 60 * 1000; // 15 minutos
 
         // Referencias de Firebase
-        let database, activeSessionsRef, connectedRef;
+        let database, activeSessionsRef, connectedRef, queueRef, activeUserRef;
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', initializeApp);
@@ -409,6 +479,8 @@
                 database = firebase.database();
                 activeSessionsRef = database.ref('activeSessions');
                 connectedRef = database.ref('.info/connected');
+                queueRef = database.ref('queue');
+                activeUserRef = database.ref('activeUser');
 
                 // Limpiar sesiones residuales
                 await cleanupResidualSessions();
@@ -416,8 +488,7 @@
                 // Configurar listeners
                 setupConnectionListener();
                 setupLoginUI();
-                updateCurrentTime();
-                setInterval(updateCurrentTime, 1000);
+                setupQueueListener();
                 
                 showNotification('Sistema inicializado correctamente', 'success');
             } catch (error) {
@@ -432,36 +503,18 @@
                 const lastSessionId = localStorage.getItem('lastSessionId');
                 
                 if (lastUser && lastSessionId) {
-                    await activeSessionsRef.child(lastUser).transaction(current => {
-                        if (current && current.sessionId === lastSessionId) {
-                            return null; // Eliminar la sesión
-                        }
-                        return current;
-                    });
+                    const sessionRef = activeSessionsRef.child(lastUser);
+                    const snapshot = await sessionRef.once('value');
+                    
+                    if (snapshot.exists() && snapshot.val().sessionId === lastSessionId) {
+                        await sessionRef.remove();
+                        await removeUserFromQueue(lastUser);
+                        await clearActiveUser(lastUser);
+                        console.log(`Sesión residual eliminada para ${lastUser}`);
+                    }
                     
                     localStorage.removeItem('lastUser');
                     localStorage.removeItem('lastSessionId');
-                }
-
-                // Limpiar sesiones expiradas
-                const now = Date.now();
-                const snapshot = await activeSessionsRef.once('value');
-                
-                if (snapshot.exists()) {
-                    const sessions = snapshot.val();
-                    const updates = {};
-                    
-                    Object.keys(sessions).forEach(userId => {
-                        const session = sessions[userId];
-                        if (now - session.lastHeartbeat > SESSION_TIMEOUT) {
-                            updates[userId] = null;
-                        }
-                    });
-                    
-                    if (Object.keys(updates).length > 0) {
-                        await activeSessionsRef.update(updates);
-                        console.log('Sesiones expiradas limpiadas:', Object.keys(updates));
-                    }
                 }
             } catch (error) {
                 console.error('Error en limpieza de sesiones:', error);
@@ -474,16 +527,32 @@
                 updateConnectionStatus();
                 
                 if (isConnected && currentUser && sessionId) {
-                    // Reiniciar heartbeat si se reconecta
+                    console.log(`Conexión establecida, reiniciando heartbeat para ${currentUser}`);
                     startHeartbeat();
+                    checkSessionValidity();
+                } else if (!isConnected && currentUser) {
+                    console.log(`Conexión perdida para ${currentUser}`);
+                    showNotification('Conexión perdida. Intentando reconectar...', 'warning');
                 }
             });
         }
 
         function setupLoginUI() {
             const userSelect = document.getElementById('userSelect');
-            userSelect.innerHTML = '<option value="" disabled selected>Selecciona tu usuario</option>';
+            const loginModal = document.getElementById('loginModal');
+            const loginButton = document.getElementById('loginButton');
             
+            if (!userSelect || !loginModal || !loginButton) {
+                console.error('Elementos de login UI no encontrados:', {
+                    userSelect: !!userSelect,
+                    loginModal: !!loginModal,
+                    loginButton: !!loginButton
+                });
+                showErrorScreen('Error: Elementos de interfaz de login no encontrados.');
+                return;
+            }
+            
+            userSelect.innerHTML = '<option value="" disabled selected>Selecciona tu usuario</option>';
             PREDEFINED_USERS.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user;
@@ -491,24 +560,49 @@
                 userSelect.appendChild(option);
             });
             
-            document.getElementById('loginModal').style.display = 'flex';
-            document.getElementById('loginButton').onclick = handleLoginClick;
+            loginModal.style.display = 'flex';
+            loginButton.onclick = handleLoginClick;
+        }
+
+        function setupQueueListener() {
+            queueRef.on('value', snapshot => {
+                updateQueueUI(snapshot.val() || {});
+            });
+
+            activeUserRef.on('value', snapshot => {
+                const activeUserData = snapshot.val();
+                updateActiveUserUI(activeUserData);
+                if (currentUser && activeUserData && activeUserData.userId === currentUser) {
+                    updateTimer(activeUserData);
+                }
+            });
         }
 
         async function handleLoginClick() {
             if (isLoggingIn) return;
             
             const userSelect = document.getElementById('userSelect');
-            const selectedUser = userSelect.value;
             const userError = document.getElementById('userError');
             const userWarning = document.getElementById('userWarning');
             const loginButton = document.getElementById('loginButton');
             const loginButtonText = document.getElementById('loginButtonText');
             
-            // Limpiar mensajes previos
+            if (!userSelect || !userError || !userWarning || !loginButton || !loginButtonText) {
+                console.error('Elementos de login no encontrados:', {
+                    userSelect: !!userSelect,
+                    userError: !!userError,
+                    userWarning: !!userWarning,
+                    loginButton: !!loginButton,
+                    loginButtonText: !!loginButtonText
+                });
+                showErrorScreen('Error: Elementos de interfaz de login no encontrados.');
+                return;
+            }
+            
             userError.style.display = 'none';
             userWarning.style.display = 'none';
 
+            const selectedUser = userSelect.value;
             if (!selectedUser || !PREDEFINED_USERS.includes(selectedUser)) {
                 showError('Selecciona un usuario válido');
                 return;
@@ -525,6 +619,8 @@
 
             try {
                 await handleUniqueLogin(selectedUser);
+                updateCurrentTime();
+                setInterval(updateCurrentTime, 1000);
             } catch (error) {
                 showError(error.message);
                 console.error('Error en login:', error);
@@ -536,139 +632,389 @@
         }
 
         async function handleUniqueLogin(selectedUser) {
-            // Generar ID de sesión único
+            console.log(`Intentando login para ${selectedUser}`);
             const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${selectedUser.replace(/\s+/g, '')}`;
+            const now = Date.now();
             
-            // Verificar y crear sesión atómica
             const result = await activeSessionsRef.child(selectedUser).transaction(currentSession => {
-                const now = Date.now();
-                
-                // Si no hay sesión activa, crear una nueva
-                if (!currentSession) {
-                    return {
-                        userId: selectedUser,
-                        sessionId: newSessionId,
-                        loginTime: now,
-                        lastHeartbeat: now,
-                        userAgent: navigator.userAgent,
-                        ipAddress: 'unknown', // En producción, obtener la IP real
-                        isActive: true
-                    };
+                if (currentSession) {
+                    console.log(`Sesión activa encontrada para ${selectedUser}`);
+                    return undefined;
                 }
                 
-                // Si hay una sesión pero está expirada, reemplazarla
-                if (now - currentSession.lastHeartbeat > SESSION_TIMEOUT) {
-                    return {
-                        userId: selectedUser,
-                        sessionId: newSessionId,
-                        loginTime: now,
-                        lastHeartbeat: now,
-                        userAgent: navigator.userAgent,
-                        ipAddress: 'unknown',
-                        isActive: true,
-                        previousSession: {
-                            sessionId: currentSession.sessionId,
-                            endTime: now,
-                            reason: 'session_timeout'
-                        }
-                    };
-                }
-                
-                // Si hay una sesión activa, no permitir el login
-                return undefined;
+                console.log(`Creando nueva sesión para ${selectedUser}, sessionId: ${newSessionId}`);
+                return {
+                    userId: selectedUser,
+                    sessionId: newSessionId,
+                    loginTime: now,
+                    lastHeartbeat: now,
+                    userAgent: navigator.userAgent,
+                    ipAddress: 'unknown',
+                    isActive: true
+                };
             });
 
             if (!result.committed) {
-                throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Solo se permite una sesión por usuario.`);
+                throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Cierra la sesión existente antes de iniciar una nueva.`);
             }
 
-            // Login exitoso
             currentUser = selectedUser;
             sessionId = newSessionId;
-            sessionStartTime = Date.now();
+            sessionStartTime = now;
             
-            // Guardar en localStorage para cleanup
             localStorage.setItem('lastUser', currentUser);
             localStorage.setItem('lastSessionId', sessionId);
             
-            // Configurar UI
-            document.getElementById('userName').textContent = currentUser;
-            document.getElementById('displayUserName').textContent = currentUser;
-            document.getElementById('displaySessionId').textContent = sessionId.substr(-8);
-            document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-ES');
+            const userName = document.getElementById('userName');
+            const sessionStart = document.getElementById('sessionStart');
+            const mainContainer = document.getElementById('mainContainer');
+            const loginModal = document.getElementById('loginModal');
             
-            // Ocultar modal y mostrar contenido principal
-            document.getElementById('loginModal').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
+            if (!userName || !sessionStart || !mainContainer || !loginModal) {
+                console.error('Elementos de UI no encontrados en handleUniqueLogin:', {
+                    userName: !!userName,
+                    sessionStart: !!sessionStart,
+                    mainContainer: !!mainContainer,
+                    loginModal: !!loginModal
+                });
+                showErrorScreen('Error: Elementos de interfaz no encontrados.');
+                return;
+            }
             
-            // Iniciar sistemas de mantenimiento de sesión
+            userName.textContent = currentUser;
+            sessionStart.textContent = new Date(sessionStartTime).toLocaleString('es-ES');
+            
+            loginModal.style.display = 'none';
+            mainContainer.style.display = 'block';
+            
             startHeartbeat();
             startSessionMonitoring();
             
             showNotification(`¡Bienvenido ${currentUser}! Sesión única iniciada.`, 'success');
         }
 
+        async function joinQueue() {
+            if (!currentUser || !isConnected) {
+                showNotification('No estás conectado o no has iniciado sesión.', 'error');
+                return;
+            }
+
+            try {
+                const queueSnapshot = await queueRef.once('value');
+                const queue = queueSnapshot.val() || {};
+                if (Object.values(queue).some(user => user.userId === currentUser)) {
+                    showNotification('Ya estás en la cola.', 'warning');
+                    return;
+                }
+
+                const activeUserSnapshot = await activeUserRef.once('value');
+                const activeUser = activeUserSnapshot.val();
+                if (activeUser && activeUser.userId === currentUser) {
+                    showNotification('Ya eres el usuario activo.', 'warning');
+                    return;
+                }
+
+                if (!activeUser) {
+                    await setActiveUser(currentUser);
+                    showNotification('¡Eres el usuario activo!', 'success');
+                    return;
+                }
+
+                const newQueueEntry = {
+                    userId: currentUser,
+                    joinTime: Date.now()
+                };
+                await queueRef.push(newQueueEntry);
+                showNotification('Te has unido a la cola.', 'success');
+            } catch (error) {
+                console.error('Error al unirse a la cola:', error);
+                showNotification('Error al unirse a la cola.', 'error');
+            }
+        }
+
+        async function setActiveUser(userId) {
+            try {
+                const now = Date.now();
+                await activeUserRef.set({
+                    userId: userId,
+                    startTime: now,
+                    timeRemaining: TIME_LIMIT,
+                    paused: false,
+                    pauseStart: null
+                });
+                if (userId === currentUser) {
+                    startTimer();
+                }
+            } catch (error) {
+                console.error('Error al establecer usuario activo:', error);
+            }
+        }
+
+        async function togglePauseResume() {
+            if (!currentUser) return;
+
+            try {
+                const activeUserSnapshot = await activeUserRef.once('value');
+                const activeUser = activeUserSnapshot.val();
+                if (!activeUser || activeUser.userId !== currentUser) {
+                    showNotification('Solo el usuario activo puede pausar/reanudar.', 'error');
+                    return;
+                }
+
+                const paused = !activeUser.paused;
+                const updates = { paused };
+                if (paused) {
+                    updates.pauseStart = Date.now();
+                } else {
+                    const pauseDuration = Date.now() - activeUser.pauseStart;
+                    updates.startTime = activeUser.startTime + pauseDuration;
+                    updates.pauseStart = null;
+                }
+
+                await activeUserRef.update(updates);
+                const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+                if (pauseResumeBtn) {
+                    pauseResumeBtn.textContent = paused ? '▶️ Reanudar' : '⏸️ Pausar';
+                }
+                showNotification(paused ? 'Tiempo pausado.' : 'Tiempo reanudado.', 'success');
+            } catch (error) {
+                console.error('Error al pausar/reanudar:', error);
+                showNotification('Error al pausar/reanudar.', 'error');
+            }
+        }
+
+        function startTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            timerInterval = setInterval(async () => {
+                const activeUserSnapshot = await activeUserRef.once('value');
+                const activeUser = activeUserSnapshot.val();
+                if (!activeUser || activeUser.userId !== currentUser || activeUser.paused) {
+                    clearInterval(timerInterval);
+                    return;
+                }
+
+                const elapsed = Date.now() - activeUser.startTime;
+                timeRemaining = Math.max(TIME_LIMIT - elapsed, 0);
+                updateTimerUI(timeRemaining);
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    await activateNextUser();
+                }
+            }, 1000);
+        }
+
+        async function activateNextUser() {
+            try {
+                await activeUserRef.remove();
+
+                const queueSnapshot = await queueRef.orderByChild('joinTime').limitToFirst(1).once('value');
+                const queue = queueSnapshot.val();
+                if (!queue) {
+                    console.log('No hay usuarios en la cola.');
+                    return;
+                }
+
+                const [key, user] = Object.entries(queue)[0];
+                await queueRef.child(key).remove();
+                await setActiveUser(user.userId);
+                showNotification(`Usuario ${user.userId} es ahora el activo.`, 'success');
+            } catch (error) {
+                console.error('Error al activar siguiente usuario:', error);
+            }
+        }
+
+        async function removeUserFromQueue(userId) {
+            try {
+                const queueSnapshot = await queueRef.once('value');
+                const queue = queueSnapshot.val();
+                if (queue) {
+                    for (const [key, user] of Object.entries(queue)) {
+                        if (user.userId === userId) {
+                            await queueRef.child(key).remove();
+                            console.log(`Usuario ${userId} eliminado de la cola.`);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error al eliminar usuario de la cola:', error);
+            }
+        }
+
+        async function clearActiveUser(userId) {
+            try {
+                const activeUserSnapshot = await activeUserRef.once('value');
+                const activeUser = activeUserSnapshot.val();
+                if (activeUser && activeUser.userId === userId) {
+                    await activeUserRef.remove();
+                    console.log(`Usuario activo ${userId} eliminado.`);
+                }
+            } catch (error) {
+                console.error('Error al limpiar usuario activo:', error);
+            }
+        }
+
+        function updateQueueUI(queue) {
+            const queueList = document.getElementById('queueList');
+            const queueCount = document.getElementById('queueCount');
+            const joinQueueBtn = document.getElementById('joinQueueBtn');
+            
+            if (!queueList || !queueCount || !joinQueueBtn) {
+                console.error('Elementos de queue UI no encontrados:', {
+                    queueList: !!queueList,
+                    queueCount: !!queueCount,
+                    joinQueueBtn: !!joinQueueBtn
+                });
+                return;
+            }
+            
+            queueList.innerHTML = '';
+            const users = Object.values(queue || {});
+            queueCount.textContent = users.length;
+
+            users.sort((a, b) => a.joinTime - b.joinTime).forEach((user, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${index + 1}. ${user.userId}`;
+                queueList.appendChild(li);
+            });
+
+            joinQueueBtn.disabled = users.some(user => user.userId === currentUser);
+        }
+
+        function updateActiveUserUI(activeUser) {
+            const activeUserDisplay = document.getElementById('activeUserDisplay');
+            const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+            const timerDisplay = document.getElementById('timerDisplay');
+            
+            if (!activeUserDisplay || !pauseResumeBtn || !timerDisplay) {
+                console.error('Elementos de activeUser UI no encontrados:', {
+                    activeUserDisplay: !!activeUserDisplay,
+                    pauseResumeBtn: !!pauseResumeBtn,
+                    timerDisplay: !!timerDisplay
+                });
+                return;
+            }
+            
+            if (activeUser) {
+                activeUserDisplay.textContent = activeUser.userId;
+                if (activeUser.userId === currentUser) {
+                    pauseResumeBtn.style.display = 'inline-block';
+                    pauseResumeBtn.textContent = activeUser.paused ? '▶️ Reanudar' : '⏸️ Pausar';
+                    timerDisplay.style.display = 'block';
+                    updateTimerUI(activeUser.timeRemaining);
+                } else {
+                    pauseResumeBtn.style.display = 'none';
+                    timerDisplay.style.display = 'none';
+                }
+            } else {
+                activeUserDisplay.textContent = 'Ninguno';
+                pauseResumeBtn.style.display = 'none';
+                timerDisplay.style.display = 'none';
+            }
+        }
+
+        function updateTimerUI(timeRemaining) {
+            const timeRemainingElement = document.getElementById('timeRemaining');
+            if (!timeRemainingElement) {
+                console.error('Elemento timeRemaining no encontrado');
+                return;
+            }
+            
+            const minutes = Math.floor(timeRemaining / 60000);
+            const seconds = Math.floor((timeRemaining % 60000) / 1000);
+            timeRemainingElement.textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
         function startHeartbeat() {
-            // Limpiar heartbeat anterior si existe
             if (heartbeatInterval) {
                 clearInterval(heartbeatInterval);
             }
             
-            // Enviar heartbeat inmediatamente
             sendHeartbeat();
             
-            // Configurar heartbeat periódico
             heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
         }
 
         async function sendHeartbeat() {
-            if (!currentUser || !sessionId || !isConnected) return;
+            if (!currentUser || !sessionId || !isConnected) {
+                console.log('Heartbeat no enviado: usuario o sesión no definida, o sin conexión');
+                return;
+            }
             
-            try {
-                const heartbeatData = {
-                    lastHeartbeat: Date.now(),
-                    isActive: true
-                };
-                
-                // Verificar que la sesión sigue siendo válida
-                const result = await activeSessionsRef.child(currentUser).transaction(currentSession => {
-                    if (!currentSession || currentSession.sessionId !== sessionId) {
-                        return undefined; // Sesión no válida
+            let retryCount = 0;
+            while (retryCount < MAX_HEARTBEAT_RETRIES) {
+                try {
+                    console.log(`Enviando heartbeat para ${currentUser}, sessionId: ${sessionId}, intento ${retryCount + 1}`);
+                    const heartbeatData = {
+                        lastHeartbeat: Date.now(),
+                        isActive: true
+                    };
+                    
+                    const result = await activeSessionsRef.child(currentUser).transaction(currentSession => {
+                        if (!currentSession || currentSession.sessionId !== sessionId) {
+                            console.log(`Sesión no válida detectada en heartbeat para ${currentUser}, esperado: ${sessionId}, encontrado: ${currentSession ? currentSession.sessionId : 'ninguna'}`);
+                            return undefined;
+                        }
+                        return { ...currentSession, ...heartbeatData };
+                    });
+                    
+                    if (!result.committed) {
+                        console.log(`Transacción de heartbeat no confirmada para ${currentUser}`);
+                        if (retryCount === MAX_HEARTBEAT_RETRIES - 1) {
+                            await forceLogout('Sesión invalidada tras múltiples intentos de heartbeat');
+                        }
+                        retryCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
                     }
-                    return { ...currentSession, ...heartbeatData };
-                });
-                
-                if (!result.committed) {
-                    // Sesión invalidada, forzar logout
-                    await forceLogout('Sesión invalidada por otra conexión');
-                }
-            } catch (error) {
-                console.error('Error enviando heartbeat:', error);
-                if (error.code === 'PERMISSION_DENIED') {
-                    await forceLogout('Permisos insuficientes');
+                    
+                    console.log(`Heartbeat exitoso para ${currentUser}`);
+                    return;
+                } catch (error) {
+                    console.error(`Error enviando heartbeat (intento ${retryCount + 1}):`, error);
+                    if (error.code === 'PERMISSION_DENIED') {
+                        await forceLogout('Permisos insuficientes en heartbeat');
+                        return;
+                    }
+                    retryCount++;
+                    if (retryCount === MAX_HEARTBEAT_RETRIES) {
+                        console.log(`Máximo de reintentos alcanzado para heartbeat de ${currentUser}`);
+                        await forceLogout('Error persistente en heartbeat tras múltiples intentos');
+                        return;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
         }
 
         function startSessionMonitoring() {
-            // Monitorear cambios en la sesión
             if (currentUser) {
+                console.log(`Iniciando monitoreo de sesión para ${currentUser}`);
                 activeSessionsRef.child(currentUser).on('value', snapshot => {
-                    if (!snapshot.exists()) {
-                        forceLogout('Sesión eliminada externamente');
-                        return;
-                    }
-                    
-                    const sessionData = snapshot.val();
-                    if (sessionData.sessionId !== sessionId) {
-                        forceLogout('Nueva sesión detectada desde otro dispositivo');
+                    try {
+                        if (!snapshot.exists()) {
+                            console.log(`Sesión no encontrada en monitoreo para ${currentUser}`);
+                            forceLogout();
+                            return;
+                        }
+                        
+                        const sessionData = snapshot.val();
+                        if (sessionData.sessionId !== sessionId) {
+                            console.log(`ID de sesión no coincide en monitoreo para ${sessionId}, encontrado: ${sessionData.sessionId}`);
+                            forceLogout();
+                        }
+                    } catch (error) {
+                        console.error('Error en el monitoreo:', error);
                     }
                 }, error => {
-                    console.error('Error monitoreando sesión:', error);
+                    console.error('Error al configurar el listener:', error);
                 });
             }
             
-            // Verificar sesión periódicamente
             if (sessionCheckInterval) {
                 clearInterval(sessionCheckInterval);
             }
@@ -677,69 +1023,60 @@
         }
 
         async function checkSessionValidity() {
-            if (!currentUser || !sessionId) return;
+            if (!currentUser || !sessionId) {
+                return;
+            }
             
             try {
+                console.log(`Verificando validez de sesión para ${currentUser}, sessionId: ${sessionId}`);
                 const snapshot = await activeSessionsRef.child(currentUser).once('value');
                 
                 if (!snapshot.exists()) {
-                    await forceLogout('Sesión no encontrada');
+                    console.log(`No se encontro la sesion para ${currentUser}`);
+                    await forceLogout('Sesión no encontrada en la base de datos');
                     return;
                 }
                 
                 const sessionData = snapshot.val();
                 if (sessionData.sessionId !== sessionId) {
+                    console.log(`ID de sesión no coincide para ${currentUser}, esperado: ${sessionId}, encontrado: ${sessionData.sessionId}`);
                     await forceLogout('ID de sesión no coincide');
-                    return;
-                }
-                
-                // Verificar si la sesión ha expirado
-                const now = Date.now();
-                if (now - sessionData.lastHeartbeat > SESSION_TIMEOUT) {
-                    await forceLogout('Sesión expirada por inactividad');
                 }
             } catch (error) {
                 console.error('Error verificando sesión:', error);
+                if (error.code !== 'PERMISSION_DENIED') {
+                    showNotification('Error verificando sesión. Intenta de nuevo.', 'warning');
+                }
             }
         }
 
         async function logout() {
             try {
                 if (currentUser && sessionId) {
-                    // Marcar sesión como terminada
-                    await activeSessionsRef.child(currentUser).update({
-                        isActive: false,
-                        logoutTime: Date.now(),
-                        logoutReason: 'user_logout'
-                    });
-                    
-                    // Eliminar la sesión después de un breve delay
-                    setTimeout(async () => {
-                        try {
-                            await activeSessionsRef.child(currentUser).remove();
-                        } catch (error) {
-                            console.error('Error eliminando sesión:', error);
-                        }
-                    }, 2000);
+                    console.log(`Cerrando sesion para ${currentUser}, sessionId: ${sessionId}`);
+                    await activeSessionsRef.child(currentUser).remove();
+                    await removeUserFromQueue(currentUser);
+                    await clearActiveUser(currentUser);
+                    console.log(`Sesion eliminada para ${currentUser}`);
                 }
                 
                 await cleanupSession();
-                showNotification('Sesión cerrada correctamente', 'success');
+                
             } catch (error) {
-                console.error('Error al cerrar sesión:', error);
-                showNotification('Error al cerrar sesión', 'error');
-                await cleanupSession(); // Limpiar de todas formas
+                console.error('Error al cerrar sesion:', error);
+                showNotification('Error al cerrar sesion', 'error');
+                await cleanupSession();
             }
         }
 
-        async function forceLogout(reason) {
-            console.warn('Logout forzado:', reason);
+        async function forceLogout(reason = 'Motivo desconocido') {
+            console.warn(`Logout forzado para ${currentUser || 'usuario no definido'}: ${reason}`);
             showNotification(`Sesión terminada: ${reason}`, 'warning');
             await cleanupSession();
         }
 
         async function cleanupSession() {
-            // Limpiar intervalos
+            console.log('Limpiando sesion local');
             if (heartbeatInterval) {
                 clearInterval(heartbeatInterval);
                 heartbeatInterval = null;
@@ -750,52 +1087,76 @@
                 sessionCheckInterval = null;
             }
             
-            // Limpiar listeners
-            if (currentUser) {
-                activeSessionsRef.child(currentUser).off();
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
             }
             
-            // Limpiar variables
+            if (currentUser) {
+                activeSessionsRef.child(currentUser).off();
+                queueRef.off();
+                activeUserRef.off();
+            }
+            
             currentUser = null;
             sessionId = null;
             sessionStartTime = null;
             
-            // Limpiar localStorage
             localStorage.removeItem('lastUser');
             localStorage.removeItem('lastSessionId');
             
-            // Resetear UI
-            document.getElementById('mainContainer').style.display = 'none';
-            setupLoginUI();
+            const mainContainer = document.getElementById('mainContainer');
+            const loginModal = document.getElementById('loginModal');
+            if (mainContainer) {
+                mainContainer.style.display = 'none';
+            }
+            if ( loginModal) {
+                setupLoginUI();
+            }
         }
 
         function updateConnectionStatus() {
             const statusElement = document.getElementById('connectionStatus');
+            if (!statusElement) {
+                console.error('Elemento connectionStatus no encontrado');
+                return;
+            }
             statusElement.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
             statusElement.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
         }
 
         function updateCurrentTime() {
+            const currentTimeElement = document.getElementById('currentTime');
+            if (!currentTimeElement || !currentUser) {
+                console.log('updateCurrentTime omitido: elemento no encontrado o sin usuario');
+                return;
+            }
             const now = new Date();
-            document.getElementById('currentTime').textContent = now.toLocaleString('es-ES', {
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric',
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit'
-            });
+            currentTimeElement.textContent = now.toLocaleString();
+                'timeRemaining': {
+                    time: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                };
+            }
         }
 
-        function showError(message) {
+        function showError(error) {
             const errorElement = document.getElementById('userError');
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
+            if (!errorElement) {
+                console.error('Elemento userError no encontrado');
+                return;
+            }
+            errorElement.textContent = error;
+            errorElement.className.display = 'block';
         }
 
         function showNotification(message, type = 'success') {
             const notification = document.getElementById('notification');
+            if (!notification) {
+                console.error('Elemento de notificación no encontrado');
+                return;
+            }
             notification.textContent = message;
             notification.className = `notification ${type}`;
             notification.classList.add('show');
@@ -807,43 +1168,42 @@
                 <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f8f9fa;">
                     <div style="background: white; padding: 40px; border-radius: 15px; text-align: center; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
                         <h2 style="color: #dc3545; margin-bottom: 20px;">❌ Error del Sistema</h2>
-                        <p style="color: #666; margin-bottom: 30px;">${message}</p>
-                        <button onclick="window.location.reload()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 1.1em;">
+                        <p style="color: #333; margin-bottom: 30px;">${message}</p>
+                        <button onclick="window.location.reload();" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 10px; cursor: pointer; font-size: 1.1em;">
                             🔄 Reintentar
                         </button>
                     </div>
                 </div>`;
         }
 
-        // Manejo de cierre de ventana/pestaña
         window.addEventListener('beforeunload', async (event) => {
             if (currentUser && sessionId) {
-                // Intentar cleanup síncrono
                 try {
-                    await activeSessionsRef.child(currentUser).update({
-                        isActive: false,
-                        logoutTime: Date.now(),
-                        logoutReason: 'window_close'
-                    });
+                    console.log(`Ejecutando cleanup antes deunload para ${currentUser}`);
+                    const snapshot = await activeSessionsRef.child(currentUser).once('value');
+                    if (snapshot.exists() && snapshot.val().sessionId === sessionId) {
+                        await activeSessionsRef.remove();
+                        await removeUserFromQueue(currentUser);
+                        await clearActiveUser();
+                        console.log(`Sesion eliminada para ${currentUser}`);
+                    }
+                    localStorage.removeItem('lastUser');
+                    localStorage.removeItem('lastSessionId');
                 } catch (error) {
                     console.error('Error en cleanup de beforeunload:', error);
                 }
-                
-                localStorage.removeItem('lastUser');
-                localStorage.removeItem('lastSessionId');
             }
         });
 
-        // Detectar cambios de visibilidad para pausar/reanudar heartbeat
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Página oculta, reducir frecuencia de heartbeat
+                console.log('Página oculta, reduciendo frecuencia de heartbeat');
                 if (heartbeatInterval) {
                     clearInterval(heartbeatInterval);
                     heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL * 2);
                 }
             } else {
-                // Página visible, restaurar heartbeat normal
+                console.log('Página visible, restaurando heartbeat normal');
                 if (currentUser && sessionId) {
                     startHeartbeat();
                 }
@@ -852,3 +1212,65 @@
     </script>
 </body>
 </html>
+</xaiArtifactId>
+
+### Cambios realizados
+1. **Eliminación de `displayUserName` y `displaySessionId`**:
+   - En `handleUniqueLogin`, se eliminaron las líneas que intentaban acceder a `displayUserName` y a `displaySessionId`, ya que no existen en el HTML. Los datos del usuario y la sesión se muestran solo en `userName` y `sessionStart`.
+2. **Logs detallados**:
+   - En `setupLoginUI`, `handleLoginClick`, `handleUniqueLogin`, y otras funciones, se añadieron logs que muestran qué elementos faltan (por ejemplo, `{ userSelect: !!userSelect, loginModal: !!loginModal, ... }`), lo que facilita identificar el problema.
+3. **Comprobaciones de `null`**:
+   - Se mantendrán las comprobaciones de los elementos del DOM para evitar errores como `Cannot set properties of null`.
+4. **Corrección de `updateCurrentTime`**:
+   - Se ajustó el formato de `currentTime` para usar solo hora, minutos y segundos, ya que el formato anterior era demasiado detallado y no se usaba completamente.
+
+### Pasos para probar las correcciones
+1. **Implementar el código**:
+   - Reemplaza tu archivo actual con el código proporcionado.
+2. **Limpiar la base de datos**:
+   - En la consola de Firebase, elimina las entradas en `activeSessions`, `queue`, y `activeUser` para evitar conflictos.
+3. **Prueba el flujo de login**:
+   - Abre la aplicación y verifica que el modal de login aparece sin errores.
+   - Selecciona un usuario (por ejemplo, "Ana Pérez") y haz clic en "Iniciar Sesión". Confirma que `mainContainer` se muestra y que los elementos como `userName` y `currentTime` se actualizan sin errores.
+4. **Prueba la actualización del tiempo:
+   - Observa que `currentTime` se actualiza cada segundo después del login.
+   - Cierra sesión y verifica que no hay errores en la consola.
+5. **Prueba la cola**:
+   - Únete a la cola y verifica que `queueList`, `queueCount`, y `activeUserDisplay` se actualicen sin errores.
+   - Si eres el usuario activo, confirma que `timeRemaining` se actualiza correctamente.
+6. **Monitorea los logs**:
+   - Abre la consola del navegador (F12 > Console) y busca errores como `Elementos de UI no encontrados`.
+   - Si aparece el error, anota qué elementos faltan según el log (por ejemplo, `{ userSelect: false, loginModal: true }`).
+7. **Prueba en modo incógnito**:
+   - Usa un navegador en incógnito modo para evitar problemas de caché o `localStorage`.
+
+### Depuración adicional si el error persiste
+Si el error "Elementos de interfaz no encontrados" sigue ocurriendo:
+- **Verifica los logs**:
+  - Revisa la consola del navegador para ver el log específico, como:
+    ```plaintext
+    Elementos de login no encontrados: { userSelect: false, userError: true, ... }
+    ```
+    Esto indica qué elemento falta (en este caso, `userSelect`).
+  - Compara el ID faltante con el HTML para confirmar si hay un error tipográfico.
+- **Inspecciona el DOM**:
+  - Usa las herramientas de desarrollador (F12 > Elements) para verificar que `loginModal`, `userSelect`, `userError`, etc., están presentes al cargar la página.
+  - Busca si algún script externo o extensión está modificando el DOM.
+- **Prueba sin Firebase**:
+  - Comenta temporalmente la inicialización de Firebase en `initializeApp` y verifica si el modal de login se carga correctamente:
+    ```javascript
+    async function initializeApp() {
+        setupLoginUI();
+        showNotification('Sistema inicializado sin Firebase para pruebas', 'success');
+    }
+    ```
+    Si esto funciona, el problema podría estar relacionado con la carga.
+- **Verifica la carga de scripts**:
+  - Asegúrate de que los scripts de Firebase se cargan correctamente. Abre la pestaña Network (F12 > Network) y verifica que `firebase-app-compat.js` y `firebase-database-compat.js` se descargan sin errores.
+- **Confirma las reglas de Firebase**:
+  - Asegúrate de que las reglas proporcionadas anteriormente están aplicadas en la base de datos. Un error de permisos podría interrumpir la inicialización y causar problemas en la UI.
+- **Prueba en otro navegador**:
+  - Usa un navegador diferente (por ejemplo, Firefox si estás en Chrome) para descartar problemas específicos del navegador.
+
+### Respuesta final
+El error **"❌ Error del Sistema: Elementos de usuario no encontrados"** se debía a que `displayUserName` y `displaySessionId` se referenciaban en `handleUniqueLogin`, pero no existían en el HTML. El código corregido elimina estas referencias y mantiene comprobaciones robustas para otros elementos del DOM. Implementa el código, sigue los pasos de prueba, y revisa los logs de la consola para confirmar que el error está resuelto. Si persiste, comparte los logs específicos (por ejemplo, qué elementos faltan) y cualquier detalle adicional (como el navegador usado) para una depuración más precisa. ¿Necesitas ayuda con algún otro aspecto del sistema?
