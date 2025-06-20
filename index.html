@@ -531,6 +531,7 @@
                                 <th>Usuario</th>
                                 <th>Hora de Ingreso</th>
                                 <th>Estado</th>
+                                <th>Tiempo Activo Restante</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -568,6 +569,7 @@
         let sessionCheckInterval = null;
         let isConnected = false;
         let isLoggingIn = false;
+        let hasBeenNotified = false; // Bandera para controlar notificaciones de turno
 
         // Constantes de configuración
         const PREDEFINED_USERS = ["Ana Pérez", "Carlos Gómez", "María Rodríguez", "Juan López", "Laura Martínez"];
@@ -703,10 +705,16 @@
                 const data = snap.val();
                 renderActiveUser(data);
                 if (data && data.userId === currentUser) {
+                    if (!hasBeenNotified) {
+                        showNotification('¡Es tu turno!', 'success');
+                        hasBeenNotified = true;
+                    }
                     setupTimer(data);
                 } else {
+                    hasBeenNotified = false; // Resetear la bandera cuando no es el usuario activo
                     stopTimer();
                 }
+                renderQueue(null, data); // Actualizar la cola con el tiempo activo
             }, error => {
                 console.error('Error en listener de activeUser:', error);
             });
@@ -748,7 +756,7 @@
             }
         }
 
-        function renderQueue(queue) {
+        function renderQueue(queue, activeUserData = null) {
             const queueList = document.getElementById('queueList').querySelector('tbody');
             if (!queueList) {
                 console.error('Elemento queueList tbody no encontrado');
@@ -757,6 +765,10 @@
 
             queueList.innerHTML = '';
             if (!queue) return;
+
+            const activeTime = activeUserData && !activeUserData.isPaused
+                ? formatTime(Math.max(0, Math.floor(activeUserData.remainingTime)))
+                : activeUserData ? 'Pausado' : 'Nadie activo';
 
             Object.values(queue).sort((a, b) => a.joinedAt - b.joinedAt)
                 .forEach((q, i) => {
@@ -767,6 +779,7 @@
                         <td>${q.userId}</td>
                         <td>${new Date(q.joinedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                         <td>${q.userId === currentUser ? 'En espera (Tú)' : 'En espera'}</td>
+                        <td>${activeTime}</td>
                     `;
                     queueList.appendChild(tr);
                 });
@@ -1164,6 +1177,7 @@
             currentUser = null;
             sessionId = null;
             sessionStartTime = null;
+            hasBeenNotified = false; // Resetear al cerrar sesión
             localStorage.removeItem('lastUser');
             localStorage.removeItem('lastSessionId');
             document.getElementById('mainContainer').style.display = 'none';
