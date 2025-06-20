@@ -5,488 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Turnos - Gestores (Sesión Única)</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h1 {
-            color: #2c3e50;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            color: transparent;
-        }
-
-        .user-info {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        .user-welcome {
-            font-size: 1.2em;
-            color: #2c3e50;
-        }
-
-        .user-name {
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .session-info {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
-
-        .logout-btn {
-            background: linear-gradient(45deg, #dc3545, #c82333);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s ease;
-        }
-
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
-        }
-
-        .current-time {
-            font-size: 1.1em;
-            color: #666;
-        }
-
-        .connection-status {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
-        }
-
-        .connection-status.connected {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .connection-status.disconnected {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .login-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .login-content {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 450px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            text-align: center;
-        }
-
-        .login-content h2 {
-            margin-bottom: 25px;
-            color: #2c3e50;
-            font-size: 1.8em;
-        }
-
-        .login-subtitle {
-            color: #666;
-            margin-bottom: 25px;
-            font-size: 1.1em;
-        }
-
-        .login-input {
-            width: 100%;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            font-size: 1em;
-            transition: all 0.3s ease;
-        }
-
-        .login-input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .login-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-            font-weight: bold;
-        }
-
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }
-
-        .login-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-            border: 1px solid #f5c6cb;
-        }
-
-        .warning-message {
-            background: #fff3cd;
-            color: #856404;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-            border: 1px solid #ffeaa7;
-        }
-
-        .forgot-password {
-            display: block;
-            margin-top: 15px;
-            color: #667eea;
-            font-size: 0.9em;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        .forgot-password:hover {
-            text-decoration: underline;
-        }
-
-        .session-details {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: left;
-        }
-
-        .session-details h4 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-
-        .session-details p {
-            margin-bottom: 5px;
-            font-size: 0.9em;
-            color: #666;
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .main-content {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #28a745;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            transform: translateX(400px);
-            opacity: 0;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .notification.show {
-            transform: translateX(0);
-            opacity: 1;
-        }
-
-        .notification.warning {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .notification.error {
-            background: #dc3545;
-        }
-
-        .heartbeat-indicator {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background: #28a745;
-            border-radius: 50%;
-            margin-right: 8px;
-            animation: heartbeat 2s infinite;
-        }
-
-        @keyframes heartbeat {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.7; }
-        }
-
-        .queue-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-            margin-top: 30px;
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 30px;
-        }
-
-        @media (max-width: 768px) {
-            .queue-panel {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .active-user-panel {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .active-user-panel h3 {
-            color: #2c3e50;
-            font-size: 1.5em;
-            margin-bottom: 15px;
-        }
-
-        .timer-clock {
-            position: relative;
-            width: 150px;
-            height: 150px;
-            margin: 20px auto;
-        }
-
-        .timer-circle {
-            fill: none;
-            stroke: #ddd;
-            stroke-width: 10;
-        }
-
-        .timer-progress {
-            fill: none;
-            stroke: url(#timerGradient);
-            stroke-width: 10;
-            stroke-linecap: round;
-            transform: rotate(-90deg);
-            transform-origin: center;
-            transition: stroke-dashoffset 0.5s linear;
-        }
-
-        .timer-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .timer-controls {
-            margin-top: 15px;
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .timer-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .timer-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
-        }
-
-        .timer-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .queue-table {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
-        }
-
-        .queue-table h3 {
-            color: #2c3e50;
-            font-size: 1.5em;
-            margin-bottom: 15px;
-        }
-
-        .queue-table table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9em;
-        }
-
-        .queue-table th, .queue-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-
-        .queue-table th {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            font-weight: bold;
-        }
-
-        .queue-table tr:nth-child(even) {
-            background: rgba(238, 238, 238, 0.5);
-        }
-
-        .queue-table tr.current-user {
-            background: rgba(102, 126, 234, 0.1);
-            font-weight: bold;
-        }
-
-        .join-queue-btn {
-            background: linear-gradient(135deg, #28a745, #218838);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1.1em;
-            margin-top: 20px;
-            transition: all 0.3s ease;
-            display: block;
-            width: 100%;
-            text-align: center;
-        }
-
-        .join-queue-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
-        }
-
-        .leave-queue-btn {
-            background: linear-gradient(45deg, #dc3545, #c82333);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s ease;
-        }
-
-        .leave-queue-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .queue-table tr {
-            animation: fadeIn 0.3s ease-in;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); border-radius: 20px; padding: 30px; text-align: center; margin-bottom: 30px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); }
+        .header h1 { color: #2c3e50; font-size: 2.5em; margin-bottom: 10px; background: linear-gradient(45deg, #667eea, #764ba2); -webkit-background-clip: text; color: transparent; }
+        .user-info { background: rgba(255, 255, 255, 0.9); border-radius: 15px; padding: 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); }
+        .user-welcome { font-size: 1.2em; color: #2c3e50; }
+        .user-name { font-weight: bold; color: #667eea; }
+        .session-info { font-size: 0.9em; color: #666; margin-top: 5px; }
+        .logout-btn { background: linear-gradient(45deg, #dc3545, #c82333); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; transition: all 0.3s ease; }
+        .logout-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3); }
+        .current-time { font-size: 1.1em; color: #666; }
+        .connection-status { padding: 5px 10px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }
+        .connection-status.connected { background: #d4edda; color: #155724; }
+        .connection-status.disconnected { background: #f8d7da; color: #721c24; }
+        .login-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); z-index: 2000; justify-content: center; align-items: center; }
+        .login-content { background: white; padding: 40px; border-radius: 15px; width: 90%; max-width: 450px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3); text-align: center; }
+        .login-content h2 { margin-bottom: 25px; color: #2c3e50; font-size: 1.8em; }
+        .login-subtitle { color: #666; margin-bottom: 25px; font-size: 1.1em; }
+        .login-input { width: 100%; padding: 15px 20px; margin-bottom: 20px; border: 2px solid #ddd; border-radius: 10px; font-size: 1em; transition: all 0.3s ease; }
+        .login-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .login-btn { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 15px 30px; border-radius: 10px; font-size: 1.1em; cursor: pointer; transition: all 0.3s ease; width: 100%; font-weight: bold; }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); }
+        .login-btn:disabled { background: #6c757d; cursor: not-allowed; transform: none; box-shadow: none; }
+        .error-message { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; border: 1px solid #f5c6cb; }
+        .warning-message { background: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; border: 1px solid #ffeaa7; }
+        .forgot-password { display: block; margin-top: 15px; color: #667eea; font-size: 0.9em; text-decoration: none; cursor: pointer; }
+        .forgot-password:hover { text-decoration: underline; }
+        .session-details { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left; }
+        .session-details h4 { color: #2c3e50; margin-bottom: 10px; }
+        .session-details p { margin-bottom: 5px; font-size: 0.9em; color: #666; }
+        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; vertical-align: middle;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .main-content { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); border-radius: 20px; padding: 30px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); }
+        .notification { position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px 25px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2); transform: translateX(400px); opacity: 0; transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55); z-index: 1000; }
+        .notification.show { transform: translateX(0); opacity: 1; }
+        .notification.warning { background: #ffc107; color: #212529; }
+        .notification.error { background: #dc3545; }
+        .heartbeat-indicator { display: inline-block; width: 8px; height: 8px; background: #28a745; border-radius: 50%; margin-right: 8px; animation: heartbeat 2s infinite; }
+        @keyframes heartbeat { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } }
+        .queue-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); border-radius: 20px; padding: 30px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); margin-top: 30px; display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
+        @media (max-width: 768px) { .queue-panel { grid-template-columns: 1fr; } }
+        .active-user-panel { background: #f8f9fa; border-radius: 15px; padding: 20px; text-align: center; }
+        .active-user-panel h3 { color: #2c3e50; font-size: 1.5em; margin-bottom: 15px; }
+        .timer-clock { position: relative; width: 150px; height: 150px; margin: 20px auto; }
+        .timer-circle { fill: none; stroke: #ddd; stroke-width: 10; }
+        .timer-progress { fill: none; stroke: url(#timerGradient); stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.5s linear; }
+        .timer-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 2em; font-weight: bold; color: #2c3e50; }
+        .timer-controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
+        .timer-btn { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; }
+        .timer-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3); }
+        .timer-btn:disabled { background: #6c757d; cursor: not-allowed; transform: none; box-shadow: none; }
+        .queue-table { background: #f8f9fa; border-radius: 15px; padding: 20px; }
+        .queue-table h3 { color: #2c3e50; font-size: 1.5em; margin-bottom: 15px; }
+        .queue-table table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        .queue-table th, .queue-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .queue-table th { background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: bold; }
+        .queue-table tr:nth-child(even) { background: rgba(238, 238, 238, 0.5); }
+        .queue-table tr.current-user { background: rgba(102, 126, 234, 0.1); font-weight: bold; }
+        .join-queue-btn { background: linear-gradient(135deg, #28a745, #218838); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 1.1em; margin-top: 20px; transition: all 0.3s ease; display: block; width: 100%; text-align: center; }
+        .join-queue-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3); }
+        .leave-queue-btn { background: linear-gradient(45deg, #dc3545, #c82333); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: all 0.3s ease; }
+        .leave-queue-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .queue-table tr { animation: fadeIn 0.3s ease-in; }
     </style>
 </head>
 <body>
-    <!-- Modal de inicio de sesión -->
     <div class="login-modal" id="loginModal">
         <div class="login-content">
             <h2>🔐 Inicio de Sesión Seguro</h2>
@@ -502,7 +88,7 @@
             <div class="session-details">
                 <h4>🛡️ Características de Seguridad:</h4>
                 <p>• Autenticación segura con correo y contraseña</p>
-                <p>• Una sesión activa por usuario</p>
+                <p>• Una sesión activa por usuario a la vez</p>
                 <p>• Heartbeat para mantener la conexión</p>
                 <p>• Limpieza automática al cerrar sesión</p>
             </div>
@@ -531,13 +117,12 @@
             </div>
         </div>
         <div class="main-content">
-            <!-- Panel de Cola y Turnos Mejorado -->
             <div class="queue-panel">
                 <div class="active-user-panel">
                     <h3>Usuario Activo</h3>
                     <div id="activeUserInfo">Nadie activo</div>
                     <div class="timer-clock">
-                        <svg width="150" height="150">
+                        <svg width="150" height="150" viewbox="0 0 150 150">
                             <defs>
                                 <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                     <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
@@ -545,7 +130,7 @@
                                 </linearGradient>
                             </defs>
                             <circle class="timer-circle" cx="75" cy="75" r="65" />
-                            <circle class="timer-progress" cx="75" cy="75" r="65" stroke-dasharray="408.4" stroke-dashoffset="408.4" id="timerProgress" />
+                            <circle class="timer-progress" id="timerProgress" cx="75" cy="75" r="65" stroke-dasharray="408.4" stroke-dashoffset="408.4" />
                         </svg>
                         <div class="timer-text" id="timerText">15:00</div>
                     </div>
@@ -553,7 +138,7 @@
                 </div>
                 <div class="queue-table">
                     <h3>Cola de Espera</h3>
-                    <table id="queueList">
+                    <table>
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -563,7 +148,7 @@
                                 <th>Acción</th>
                             </tr>
                         </thead>
-                        <tbody></tbody>
+                        <tbody id="queueListBody"></tbody>
                     </table>
                     <button id="joinQueueBtn" class="join-queue-btn">📝 Unirse a la Cola</button>
                 </div>
@@ -573,14 +158,14 @@
 
     <div class="notification" id="notification"></div>
 
-    <!-- Firebase SDKs (actualizados a la última versión compatible) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-
-<script>
-    // CONFIGURACIÓN DE FIREBASE
+    <script>
+    // =================================================================================
+    // CONFIGURACIÓN E INICIALIZACIÓN
+    // =================================================================================
     const firebaseConfig = {
         apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
         authDomain: "sistema-turnos-gestores.firebaseapp.com",
@@ -592,44 +177,26 @@
         measurementId: "G-GV4JVLKEFY"
     };
 
-    // =================================================================================
-    // VARIABLES GLOBALES Y CONSTANTES
-    // =================================================================================
-    let currentUser = null;
-    let sessionId = null;
-    let sessionStartTime = null;
-    let heartbeatInterval = null;
-    let sessionCheckInterval = null;
-    let globalTimerInterval = null;
-    let isConnected = false;
-    let isLoggingIn = false;
-    let hasBeenNotified = false;
+    let currentUser = null, sessionId = null, sessionStartTime = null;
+    let heartbeatInterval = null, sessionCheckInterval = null, globalTimerInterval = null;
+    let isConnected = false, isLoggingIn = false, hasBeenNotified = false;
 
-    const HEARTBEAT_INTERVAL = 30000; // 30 segundos
-    const SESSION_CHECK_INTERVAL = 10000; // 10 segundos
-    const TURN_TIME = 15 * 60; // 15 minutos en segundos
+    const HEARTBEAT_INTERVAL = 30000;
+    const SESSION_CHECK_INTERVAL = 10000;
+    const TURN_TIME = 15 * 60;
 
-    // Referencias de la base de datos de Firebase
     let database, auth, activeSessionsRef, connectedRef, queueRef, activeUserRef;
     const QUEUE_PATH = 'queueSystem/queue';
     const ACTIVE_USER_PATH = 'queueSystem/activeUser';
 
-
-    // =================================================================================
-    // INICIALIZACIÓN DE LA APLICACIÓN
-    // =================================================================================
     document.addEventListener('DOMContentLoaded', initializeApp);
 
     function initializeApp() {
-        console.log('Iniciando la aplicación...');
         try {
-            if (typeof window.firebase === 'undefined') {
-                throw new Error('El SDK de Firebase no se ha cargado correctamente.');
-            }
+            if (typeof window.firebase === 'undefined') throw new Error('El SDK de Firebase no se ha cargado.');
             
             firebase.initializeApp(firebaseConfig);
             
-            // Asignación de referencias de Firebase
             database = firebase.database();
             auth = firebase.auth();
             activeSessionsRef = database.ref('activeSessions');
@@ -637,9 +204,6 @@
             queueRef = database.ref(QUEUE_PATH);
             activeUserRef = database.ref(ACTIVE_USER_PATH);
             
-            console.log('Firebase inicializado con éxito.');
-
-            // Configuración de los listeners y la UI
             setupConnectionListener();
             setupLoginUI();
             updateCurrentTime();
@@ -647,16 +211,13 @@
             setupQueueSystem();
             setupGlobalTimerListener();
             requestNotificationPermission();
-
         } catch (error) {
-            console.error('Error Crítico en initializeApp:', error);
             showErrorScreen(`Error al inicializar la aplicación: ${error.message}`);
         }
     }
 
-
     // =================================================================================
-    // LÓGICA DE INICIO DE SESIÓN Y SESIÓN ÚNICA
+    // LÓGICA DE SESIÓN (LOGIN, LOGOUT, HEARTBEAT)
     // =================================================================================
 
     function setupLoginUI() {
@@ -667,13 +228,11 @@
         const forgotPasswordLink = document.getElementById('forgotPasswordLink');
 
         if (!loginModal || !emailInput || !passwordInput || !loginButton || !forgotPasswordLink) {
-            return showErrorScreen('Error crítico: No se encontraron los elementos de la UI de login.');
+            return showErrorScreen('Error: Faltan elementos de la UI de login.');
         }
-
         loginModal.style.display = 'flex';
         loginButton.onclick = handleLoginClick;
         forgotPasswordLink.onclick = handleForgotPassword;
-        
         passwordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleLoginClick();
         });
@@ -682,13 +241,10 @@
     async function handleLoginClick() {
         if (isLoggingIn) return;
 
-        const emailInput = document.getElementById('emailInput');
-        const passwordInput = document.getElementById('passwordInput');
+        const email = document.getElementById('emailInput').value.trim();
+        const password = document.getElementById('passwordInput').value;
         const loginButton = document.getElementById('loginButton');
         const loginButtonText = document.getElementById('loginButtonText');
-
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
 
         if (!email || !password) return showError('Por favor, ingresa correo y contraseña.');
         if (!isConnected) return showNotification('Sin conexión al servidor.', 'error');
@@ -696,10 +252,42 @@
         isLoggingIn = true;
         loginButton.disabled = true;
         loginButtonText.innerHTML = '<span class="loading-spinner"></span> Verificando...';
-        showError(null); // Limpiar errores anteriores
+        showError(null);
 
         try {
-            await handleUniqueLogin(email, password);
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+            
+            const sessionRef = activeSessionsRef.child(user.uid);
+            const sessionSnapshot = await sessionRef.once('value');
+            if (sessionSnapshot.exists()) {
+                await auth.signOut();
+                throw new Error(`El usuario ${email} ya tiene una sesión activa.`);
+            }
+
+            const newSessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            await sessionRef.set({
+                userId: user.uid,
+                email: user.email,
+                sessionId: newSessionId,
+                loginTime: firebase.database.ServerValue.TIMESTAMP,
+                lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP,
+                userAgent: navigator.userAgent
+            });
+            await sessionRef.onDisconnect().remove();
+
+            currentUser = user;
+            sessionId = newSessionId;
+            sessionStartTime = Date.now();
+
+            document.getElementById('userName').textContent = currentUser.email;
+            document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-ES');
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+
+            startHeartbeat();
+            startSessionMonitoring();
+            showNotification(`👋 ¡Bienvenido/a, ${currentUser.email}!`, 'success');
         } catch (error) {
             showError(error.message);
         } finally {
@@ -707,53 +295,6 @@
             loginButton.disabled = false;
             loginButtonText.innerHTML = '🚀 Iniciar Sesión';
         }
-    }
-
-    async function handleUniqueLogin(email, password) {
-        // 1. Autenticar con Firebase Auth
-        let userCredential;
-        try {
-            userCredential = await auth.signInWithEmailAndPassword(email, password);
-        } catch (authError) {
-            throw new Error('Credenciales incorrectas. Por favor, verifica tu correo y contraseña.');
-        }
-        const user = userCredential.user;
-
-        // 2. Revisar si ya existe una sesión activa en la Realtime Database
-        const sessionRef = activeSessionsRef.child(user.uid);
-        const sessionSnapshot = await sessionRef.once('value');
-        if (sessionSnapshot.exists()) {
-            await auth.signOut();
-            throw new Error(`El usuario ${email} ya tiene una sesión activa en otro lugar.`);
-        }
-
-        // 3. Crear la nueva sesión en la base de datos
-        const newSessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const newSessionData = {
-            userId: user.uid,
-            email: user.email,
-            sessionId: newSessionId,
-            loginTime: firebase.database.ServerValue.TIMESTAMP,
-            lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP,
-            userAgent: navigator.userAgent
-        };
-        await sessionRef.set(newSessionData);
-        await sessionRef.onDisconnect().remove(); // Asegura que la sesión se borre si se cierra el navegador abruptamente
-
-        // 4. Configurar el estado local de la aplicación
-        currentUser = user;
-        sessionId = newSessionId;
-        sessionStartTime = Date.now();
-
-        // 5. Actualizar la UI
-        document.getElementById('userName').textContent = currentUser.email;
-        document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-ES');
-        document.getElementById('loginModal').style.display = 'none';
-        document.getElementById('mainContainer').style.display = 'block';
-
-        startHeartbeat();
-        startSessionMonitoring();
-        showNotification(`👋 ¡Bienvenido/a, ${currentUser.email}!`, 'success');
     }
 
     async function logout() {
@@ -769,47 +310,111 @@
             showNotification('Sesión cerrada correctamente', 'success');
         }
     }
+
+    function setupConnectionListener() {
+        connectedRef.on('value', snap => {
+            isConnected = snap.val();
+            updateConnectionStatus();
+            if (isConnected && currentUser) startHeartbeat(); else stopHeartbeat();
+        });
+    }
+
+    function startHeartbeat() {
+        stopHeartbeat();
+        sendHeartbeat();
+        heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+    }
     
+    function stopHeartbeat() {
+        clearInterval(heartbeatInterval);
+    }
+
+    async function sendHeartbeat() {
+        if (!currentUser || !isConnected) return;
+        try {
+            await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP });
+        } catch(error) {
+            console.warn("Fallo de Heartbeat:", error.message);
+        }
+    }
+    
+    function startSessionMonitoring() {
+        stopSessionMonitoring();
+        sessionCheckInterval = setInterval(async () => {
+            if (!currentUser) return stopSessionMonitoring();
+            try {
+                const snapshot = await activeSessionsRef.child(currentUser.uid).once('value');
+                if (!snapshot.exists() || snapshot.val().sessionId !== sessionId) {
+                    forceLogout(!snapshot.exists() ? 'Sesión expirada.' : 'Nueva sesión iniciada en otro lugar.');
+                }
+            } catch (error) { console.warn("Error verificando sesión:", error.message); }
+        }, SESSION_CHECK_INTERVAL);
+    }
+
+    function stopSessionMonitoring() {
+        clearInterval(sessionCheckInterval);
+    }
+
+    function forceLogout(reason) {
+        showNotification(`Sesión terminada: ${reason}`, 'warning');
+        cleanupSessionState();
+    }
+    
+    function cleanupSessionState() {
+        stopHeartbeat();
+        stopSessionMonitoring();
+        stopGlobalTimer();
+
+        if (currentUser) activeSessionsRef.child(currentUser.uid).off();
+        activeUserRef.off();
+        queueRef.off();
+
+        currentUser = null, sessionId = null, sessionStartTime = null;
+        isLoggingIn = false, hasBeenNotified = false;
+        
+        document.getElementById('mainContainer').style.display = 'none';
+        setupLoginUI();
+    }
+
+    async function handleForgotPassword(event) {
+        event.preventDefault();
+        const email = document.getElementById('emailInput').value.trim();
+        if (!email) return showError('Ingresa tu correo para restablecer la contraseña.');
+        try {
+            await auth.sendPasswordResetEmail(email);
+            showWarning('Se ha enviado un enlace de restablecimiento a tu correo.');
+        } catch (error) {
+            showError(`Error: ${error.message}`);
+        }
+    }
+
     // =================================================================================
-    // LÓGICA DE GESTIÓN DE LA COLA
+    // LÓGICA DE COLA Y TURNOS
     // =================================================================================
     
     function setupQueueSystem() {
+        document.getElementById('joinQueueBtn').onclick = joinQueue;
         setupQueueListeners();
-        const joinQueueBtn = document.getElementById('joinQueueBtn');
-        if (joinQueueBtn) {
-            joinQueueBtn.onclick = joinQueue;
-        } else {
-            console.error('Botón joinQueueBtn no encontrado');
-        }
     }
 
     async function joinQueue() {
         if (!isConnected || !currentUser) return;
-
         try {
             const activeUserSnap = await activeUserRef.once('value');
             if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
-                return showNotification('No puedes unirte a la cola mientras estás activo.', 'warning');
+                return showNotification('Ya tienes un turno activo.', 'warning');
             }
-
             const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value');
-            if (queueSnap.exists()) {
-                return showNotification('Ya estás en la cola.', 'warning');
-            }
+            if (queueSnap.exists()) return showNotification('Ya estás en la cola.', 'warning');
             
             await queueRef.push({
                 userId: currentUser.uid,
                 email: currentUser.email,
                 joinedAt: firebase.database.ServerValue.TIMESTAMP
             });
-
-            showNotification('Te uniste a la cola con éxito.', 'success');
-            if (!activeUserSnap.exists()) {
-                await activateNextInQueue();
-            }
+            showNotification('Te uniste a la cola.', 'success');
+            if (!activeUserSnap.exists()) await activateNextInQueue();
         } catch (error) {
-            console.error('Error al unirse a la cola:', error);
             showNotification(`Error al unirse a la cola: ${error.message}`, 'error');
         }
     }
@@ -820,21 +425,19 @@
             await queueRef.child(queueKey).remove();
             showNotification('Has salido de la cola.', 'success');
         } catch (error) {
-            console.error('Error al salir de la cola:', error);
             showNotification(`Error al salir: ${error.message}`, 'error');
         }
     }
     
     async function activateNextInQueue() {
         const activeUserSnap = await activeUserRef.once('value');
-        if (activeUserSnap.exists()) return; // Ya hay alguien activo
+        if (activeUserSnap.exists()) return;
 
         const queueSnap = await queueRef.orderByChild('joinedAt').limitToFirst(1).once('value');
         if (!queueSnap.exists()) {
-            await activeUserRef.remove(); // Limpia por si acaso
+            await activeUserRef.remove();
             return;
         }
-
         const [key, userToActivate] = Object.entries(queueSnap.val())[0];
         
         await activeUserRef.set({
@@ -844,141 +447,22 @@
             remainingTime: TURN_TIME,
             isPaused: false
         });
-        await queueRef.child(key).remove(); // Sacar al usuario de la cola
+        await queueRef.child(key).remove();
     }
 
     function setupQueueListeners() {
         activeUserRef.on('value', snap => {
             renderActiveUser(snap.val());
-            if (snap.exists() && snap.val().userId === currentUser?.uid && !hasBeenNotified) {
+            const data = snap.val();
+            if (data && data.userId === currentUser?.uid && !hasBeenNotified) {
                 showNotification('¡Es tu turno!', 'success');
-                showSystemNotification('¡Es tu turno! Por favor, regresa al sistema.');
+                showSystemNotification('¡Es tu turno! Regresa al sistema.');
                 hasBeenNotified = true;
-            } else if (!snap.exists() || snap.val().userId !== currentUser?.uid) {
+            } else if (!data || data.userId !== currentUser?.uid) {
                 hasBeenNotified = false;
             }
-        }, error => console.error('Error en listener de activeUser:', error));
-
-        queueRef.on('value', snap => renderQueue(snap.val()), error => console.error('Error en listener de queue:', error));
-    }
-
-
-    // =================================================================================
-    // LÓGICA DEL TEMPORIZADOR
-    // =================================================================================
-    
-    function setupGlobalTimerListener() {
-        activeUserRef.on('value', (snap) => {
-            stopGlobalTimer();
-            const data = snap.val();
-            if (data && !data.isPaused) {
-                startGlobalTimer(data);
-            } else {
-                updateTimerDisplayUI(data ? data.remainingTime : TURN_TIME);
-            }
-        }, error => console.error("Error escuchando al usuario activo para el timer:", error));
-    }
-
-    function startGlobalTimer(activeUserData) {
-        stopGlobalTimer();
-        let remaining = activeUserData.remainingTime;
-        updateTimerDisplayUI(remaining);
-
-        globalTimerInterval = setInterval(() => {
-            remaining--;
-            if (remaining < 0) {
-                stopGlobalTimer();
-                // Solo el cliente del usuario activo debe finalizar el turno para evitar race conditions
-                if (activeUserData.userId === currentUser?.uid) {
-                    activeUserRef.remove().then(activateNextInQueue);
-                }
-            } else {
-                updateTimerDisplayUI(remaining);
-            }
-        }, 1000);
-    }
-    
-    function stopGlobalTimer() {
-        clearInterval(globalTimerInterval);
-        globalTimerInterval = null;
-    }
-    
-    function pauseTimer() {
-        if (!currentUser) return;
-        activeUserRef.update({ isPaused: true }).catch(e => console.error('Error al pausar:', e));
-    }
-
-    function resumeTimer() {
-        if (!currentUser) return;
-        activeUserRef.update({ isPaused: false }).catch(e => console.error('Error al reanudar:', e));
-    }
-    
-    
-    // =================================================================================
-    // MONITOREO DE CONEXIÓN Y SESIÓN
-    // =================================================================================
-    
-    function setupConnectionListener() {
-        connectedRef.on('value', snap => {
-            isConnected = snap.val();
-            updateConnectionStatus();
-            if (isConnected && currentUser) {
-                startHeartbeat();
-            } else {
-                stopHeartbeat();
-            }
-        }, error => console.error('Error en listener de conexión:', error));
-    }
-    
-    function startHeartbeat() {
-        stopHeartbeat();
-        sendHeartbeat();
-        heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
-    }
-    
-    function stopHeartbeat() {
-        clearInterval(heartbeatInterval);
-        heartbeatInterval = null;
-    }
-
-    async function sendHeartbeat() {
-        if (!currentUser || !sessionId || !isConnected) return;
-        try {
-            await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP });
-        } catch(error) {
-            console.warn("No se pudo enviar el heartbeat:", error.message);
-        }
-    }
-    
-    function startSessionMonitoring() {
-        stopSessionMonitoring();
-        sessionCheckInterval = setInterval(async () => {
-            if (!currentUser) return stopSessionMonitoring();
-            try {
-                const snapshot = await activeSessionsRef.child(currentUser.uid).once('value');
-                if (!snapshot.exists()) {
-                    forceLogout('Tu sesión ha sido cerrada (posiblemente por inactividad).');
-                } else if (snapshot.val().sessionId !== sessionId) {
-                    forceLogout('Se ha iniciado una nueva sesión en otro dispositivo.');
-                }
-            } catch (error) {
-                console.warn("Error verificando la sesión:", error.message);
-            }
-        }, SESSION_CHECK_INTERVAL);
-    }
-    
-    function stopSessionMonitoring() {
-        clearInterval(sessionCheckInterval);
-        sessionCheckInterval = null;
-    }
-    
-    // =================================================================================
-    // MANEJO DEL ESTADO DE LA SESIÓN (CIERRE Y LIMPIEZA)
-    // =================================================================================
-
-    function forceLogout(reason = 'Razón desconocida') {
-        showNotification(`Sesión terminada: ${reason}`, 'warning');
-        cleanupSessionState();
+        });
+        queueRef.on('value', snap => renderQueue(snap.val()));
     }
     
     async function cleanupQueueOnLogout() {
@@ -994,62 +478,55 @@
                 await activeUserRef.remove();
                 await activateNextInQueue();
             }
-        } catch (error) {
-            console.error('Error limpiando la cola al cerrar sesión:', error);
-        }
+        } catch (error) { console.error('Error limpiando la cola:', error); }
     }
 
-    function cleanupSessionState() {
-        stopHeartbeat();
-        stopSessionMonitoring();
+    // =================================================================================
+    // LÓGICA DEL TEMPORIZADOR Y RENDERIZADO
+    // =================================================================================
+    
+    function setupGlobalTimerListener() {
+        activeUserRef.on('value', (snap) => {
+            stopGlobalTimer();
+            const data = snap.val();
+            if (data && !data.isPaused) {
+                startGlobalTimer(data);
+            } else {
+                updateTimerDisplayUI(data ? data.remainingTime : TURN_TIME);
+            }
+        });
+    }
+
+    function startGlobalTimer(activeUserData) {
         stopGlobalTimer();
-
-        // Detener todos los listeners para evitar fugas de memoria
-        if (currentUser) activeSessionsRef.child(currentUser.uid).off();
-        activeUserRef.off();
-        queueRef.off();
-
-        // Reiniciar variables de estado
-        currentUser = null;
-        sessionId = null;
-        sessionStartTime = null;
-        isLoggingIn = false;
-        hasBeenNotified = false;
-        
-        // Restaurar la UI al estado inicial
-        document.getElementById('mainContainer').style.display = 'none';
-        setupLoginUI();
+        let remaining = activeUserData.remainingTime;
+        updateTimerDisplayUI(remaining);
+        globalTimerInterval = setInterval(() => {
+            remaining--;
+            if (remaining < 0) {
+                stopGlobalTimer();
+                if (activeUserData.userId === currentUser?.uid) {
+                    activeUserRef.remove().then(activateNextInQueue);
+                }
+            } else {
+                updateTimerDisplayUI(remaining);
+            }
+        }, 1000);
     }
     
-    async function handleForgotPassword(event) {
-        event.preventDefault();
-        const email = document.getElementById('emailInput').value.trim();
-        if (!email) return showError('Ingresa tu correo para restablecer la contraseña.');
-
-        try {
-            await auth.sendPasswordResetEmail(email);
-            showWarning('Se ha enviado un enlace de restablecimiento a tu correo.');
-        } catch (error) {
-            showError(`Error al enviar el enlace: ${error.message}`);
-        }
-    }
-
-    // =================================================================================
-    // FUNCIONES DE UTILIDAD Y RENDERIZADO DE UI
-    // =================================================================================
-
+    function stopGlobalTimer() { clearInterval(globalTimerInterval); }
+    function pauseTimer() { if (currentUser) activeUserRef.update({ isPaused: true }); }
+    function resumeTimer() { if (currentUser) activeUserRef.update({ isPaused: false }); }
+    
     function renderActiveUser(data) {
         const activeUserInfo = document.getElementById('activeUserInfo');
         const timerControls = document.getElementById('timerControls');
-        if (!activeUserInfo || !timerControls) return;
-
         if (!data) {
             activeUserInfo.innerHTML = 'Nadie activo';
             timerControls.innerHTML = '';
             updateTimerDisplayUI(TURN_TIME);
             return;
         }
-
         activeUserInfo.innerHTML = `<b>${data.email}</b>`;
         if (data.userId === currentUser?.uid) {
             timerControls.innerHTML = `
@@ -1064,121 +541,79 @@
     }
 
     function renderQueue(queueData) {
-        const queueListBody = document.querySelector('#queueList tbody');
-        if (!queueListBody) return;
-
+        const queueListBody = document.getElementById('queueListBody');
         queueListBody.innerHTML = '';
         if (!queueData) {
             queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>';
             return;
         }
-        
         const sortedQueue = Object.entries(queueData).sort(([, a], [, b]) => a.joinedAt - b.joinedAt);
         if (sortedQueue.length === 0) {
             queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>';
             return;
         }
-
         sortedQueue.forEach(([key, q], index) => {
             const tr = document.createElement('tr');
             if (q.userId === currentUser?.uid) tr.classList.add('current-user');
-            
-            const leaveButton = q.userId === currentUser?.uid 
-                ? `<button class="leave-queue-btn" onclick="leaveQueue('${key}')">🚗 Salir</button>`
-                : '';
-            
             tr.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${q.email}</td>
                 <td>${new Date(q.joinedAt).toLocaleTimeString('es-ES')}</td>
                 <td>En espera</td>
-                <td>${leaveButton}</td>
+                <td>${q.userId === currentUser?.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${key}')">🚗 Salir</button>`: ''}</td>
             `;
             queueListBody.appendChild(tr);
         });
-    }
-    
-    function requestNotificationPermission() {
-        if (!("Notification" in window)) return;
-        Notification.requestPermission().then(permission => {
-            if (permission !== "granted") {
-                showNotification("Notificaciones desactivadas. No recibirás alertas de turno.", 'warning');
-            }
-        });
-    }
-
-    function showSystemNotification(message) {
-        if (Notification.permission === "granted") new Notification("Sistema de Turnos", { body: message });
-    }
-
-    function formatTime(seconds) {
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
     }
 
     function updateTimerDisplayUI(seconds) {
         const timerText = document.getElementById('timerText');
         const timerProgress = document.getElementById('timerProgress');
-        if (timerText && timerProgress) {
-            const remaining = Math.max(0, seconds);
-            timerText.textContent = formatTime(remaining);
-            const progress = remaining / TURN_TIME;
-            timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);
-        }
+        const remaining = Math.max(0, seconds);
+        timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`;
+        timerProgress.style.strokeDashoffset = 408.4 * (1 - (remaining / TURN_TIME));
     }
     
     function updateConnectionStatus() {
         const statusElement = document.getElementById('connectionStatus');
-        if (statusElement) {
-            statusElement.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-            statusElement.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
-        }
+        statusElement.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+        statusElement.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
     }
 
     function updateCurrentTime() {
-        const currentTimeElement = document.getElementById('currentTime');
-        if (currentTimeElement) {
-            currentTimeElement.textContent = new Date().toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'medium' });
-        }
+        document.getElementById('currentTime').textContent = new Date().toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'medium' });
     }
 
     function showError(message) {
-        const errorElement = document.getElementById('userError');
-        if (errorElement) {
-            errorElement.style.display = message ? 'block' : 'none';
-            errorElement.textContent = message;
-        }
+        const el = document.getElementById('userError');
+        el.style.display = message ? 'block' : 'none';
+        el.textContent = message;
     }
 
     function showWarning(message) {
-        const warningElement = document.getElementById('userWarning');
-        if (warningElement) {
-            warningElement.style.display = message ? 'block' : 'none';
-            warningElement.textContent = message;
-        }
+        const el = document.getElementById('userWarning');
+        el.style.display = message ? 'block' : 'none';
+        el.textContent = message;
     }
 
     function showNotification(message, type = 'success') {
-        const notificationElement = document.getElementById('notification');
-        if (notificationElement) {
-            notificationElement.textContent = message;
-            notificationElement.className = `notification ${type} show`;
-            setTimeout(() => notificationElement.classList.remove('show'), 4000);
-        }
+        const el = document.getElementById('notification');
+        el.textContent = message;
+        el.className = `notification ${type} show`;
+        setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    function requestNotificationPermission() {
+        if ("Notification" in window && Notification.permission !== 'granted') Notification.requestPermission();
+    }
+
+    function showSystemNotification(message) {
+        if ("Notification" in window && Notification.permission === "granted") new Notification("Sistema de Turnos", { body: message });
     }
 
     function showErrorScreen(message) {
-        console.error("Mostrando pantalla de error:", message);
-        document.body.innerHTML = `
-            <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: #f4f4f4;">
-                <div style="background: #fff; padding: 40px; border-radius: 10px; text-align: center; max-width: 600px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
-                    <h2 style="color: #dc3545; margin-bottom: 20px;">🆘 Error Crítico del Sistema</h2>
-                    <p style="color: #333; margin-bottom: 30px;">${message}</p>
-                    <button style="background: #667eea; color: white; padding: 12px 25px; border-radius: 5px; cursor: pointer;" onclick="window.location.reload()">🔄 Recargar la página</button>
-                </div>
-            </div>`;
+        document.body.innerHTML = `<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: #f4f4f4; color: #333; text-align: center;"><div style="background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);"><h2>🆘 Error Crítico</h2><p style="margin: 20px 0;">${message}</p><button style="background: #667eea; color: white; padding: 12px 25px; border-radius: 5px; cursor: pointer;" onclick="window.location.reload()">🔄 Recargar</button></div></div>`;
     }
-</script>
+    </script>
 </body>
 </html>
