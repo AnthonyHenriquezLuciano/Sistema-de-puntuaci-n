@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos - Gestores</title>
+    <title>Sistema de Turnos - Gestores (Sesión Única)</title>
     <style>
         * {
             margin: 0;
@@ -63,6 +63,28 @@
             color: #667eea;
         }
 
+        .session-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .logout-btn {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+
         .current-time {
             font-size: 1.1em;
             color: #666;
@@ -85,236 +107,143 @@
             color: #721c24;
         }
 
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 400px;
-            gap: 30px;
-        }
-
-        .queue-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .controls-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-        }
-
-        .section-title {
-            font-size: 1.8em;
-            color: #2c3e50;
-            margin-bottom: 25px;
-            text-align: center;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
-        }
-
-        .join-queue-btn {
+        .login-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            background: linear-gradient(135deg, #28a745, #20c997);
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-content {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .login-content h2 {
+            margin-bottom: 25px;
+            color: #2c3e50;
+            font-size: 1.8em;
+        }
+
+        .login-subtitle {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 1.1em;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .login-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .login-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-size: 1.2em;
-            font-weight: bold;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
             cursor: pointer;
-            margin-bottom: 25px;
             transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+            width: 100%;
+            font-weight: bold;
         }
 
-        .join-queue-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
 
-        .join-queue-btn:disabled {
+        .login-btn:disabled {
             background: #6c757d;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
 
-        .leave-queue-btn {
-            width: 100%;
-            background: linear-gradient(45deg, #dc3545, #c82333);
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 12px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 25px;
-            transition: all 0.3s ease;
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            border: 1px solid #f5c6cb;
         }
 
-        .leave-queue-btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .queue-list {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .queue-item {
-            background: #f8f9fa;
-            border-left: 5px solid #dee2e6;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .queue-item.active {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border-left-color: #fff;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-            transform: scale(1.02);
-        }
-
-        .queue-item.waiting {
-            border-left-color: #ffc107;
+        .warning-message {
             background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            border: 1px solid #ffeaa7;
         }
 
-        .queue-item.completed {
-            border-left-color: #6c757d;
-            background: #e2e3e5;
-            opacity: 0.7;
-        }
-
-        .queue-position {
-            position: absolute;
-            top: -10px;
-            left: -10px;
-            background: #667eea;
-            color: white;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .queue-item.active .queue-position {
-            background: #fff;
-            color: #28a745;
-        }
-
-        .gestores-name {
-            font-size: 1.3em;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .gestores-status {
-            font-size: 1em;
-            margin-bottom: 8px;
-        }
-
-        .gestores-time {
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-
-        .timer-display {
-            background: #2c3e50;
-            color: white;
-            border-radius: 15px;
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.2);
-        }
-
-        .timer-time {
-            font-size: 3.5em;
-            font-weight: bold;
-            margin-bottom: 10px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .timer-label {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .timer-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .timer-btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .timer-btn.pause {
-            background: linear-gradient(135deg, #ffc107, #ffca2c);
-            color: #212529;
-        }
-
-        .timer-btn.resume {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-        }
-
-        .timer-btn:disabled {
-            background: #6c757d;
-            color: #adb5bd;
-            cursor: not-allowed;
-        }
-
-        .timer-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-        }
-
-        .stats-section {
+        .session-details {
             background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 25px;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
         }
 
-        .stats-title {
-            font-size: 1.2em;
-            font-weight: bold;
+        .session-details h4 {
             color: #2c3e50;
-            margin-bottom: 15px;
-        }
-
-        .stats-item {
-            display: flex;
-            justify-content: space-between;
             margin-bottom: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid #dee2e6;
         }
 
-        .stats-item:last-child {
-            border-bottom: none;
+        .session-details p {
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .main-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
         }
 
         .notification {
@@ -346,137 +275,19 @@
             background: #dc3545;
         }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            font-size: 1.2em;
-        }
-
-        .loading-spinner {
+        .heartbeat-indicator {
             display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            width: 8px;
+            height: 8px;
+            background: #28a745;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            margin-right: 8px;
+            animation: heartbeat 2s infinite;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 1024px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            .container {
-                padding: 10px;
-            }
-            .header h1 {
-                font-size: 2em;
-            }
-            .timer-time {
-                font-size: 2.5em;
-            }
-        }
-
-        .empty-queue {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            font-size: 1.2em;
-        }
-
-        .empty-queue-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-
-        .login-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .login-content {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            text-align: center;
-        }
-
-        .login-content h2 {
-            margin-bottom: 20px;
-            color: #2c3e50;
-        }
-
-        .login-input {
-            width: 100%;
-            padding: 12px 15px;
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1em;
-        }
-
-        .login-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .time-info {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 0.9em;
-            display: none;
-        }
-
-        .error-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            max-width: 500px;
-            margin: 50px auto;
-        }
-
-        .error-container button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-            cursor: pointer;
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
         }
     </style>
 </head>
@@ -484,75 +295,65 @@
     <!-- Modal de inicio de sesión -->
     <div class="login-modal" id="loginModal">
         <div class="login-content">
-            <h2>Iniciar sesión</h2>
-            <p>Selecciona tu nombre de usuario</p>
-            <select class="login-input" id="userSelect"></select>
-            <div id="userError" style="color: #dc3545; margin-bottom: 15px; display: none;"></div>
-            <button class="login-btn" id="loginButton">Ingresar</button>
+            <h2>🔐 Inicio de Sesión Seguro</h2>
+            <p class="login-subtitle">Sistema de sesión única - Solo un usuario activo por cuenta</p>
+            
+            <div class="error-message" id="userError"></div>
+            <div class="warning-message" id="userWarning"></div>
+            
+            <select class="login-input" id="userSelect">
+                <option value="" disabled selected>Selecciona tu usuario</option>
+            </select>
+            
+            <button class="login-btn" id="loginButton">
+                <span id="loginButtonText">🚀 Iniciar Sesión</span>
+            </button>
+
+            <div class="session-details">
+                <h4>🛡️ Características de Seguridad:</h4>
+                <p>• Una sesión activa por usuario</p>
+                <p>• Detección automática de sesiones múltiples</p>
+                <p>• Heartbeat para mantener la conexión</p>
+                <p>• Limpieza automática de sesiones inactivas</p>
+            </div>
         </div>
     </div>
 
     <div class="container" id="mainContainer" style="display: none;">
         <div class="header">
             <h1>🎯 Sistema de Turnos</h1>
-            <p>Gestión inteligente de turnos - 15 minutos por sesión</p>
+            <p>Gestión inteligente con sesión única - Máxima seguridad</p>
         </div>
 
         <div class="user-info">
             <div class="user-welcome">
-                👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
+                <div>
+                    <span class="heartbeat-indicator"></span>
+                    👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
+                </div>
+                <div class="session-info" id="sessionInfo">
+                    Sesión iniciada: <span id="sessionStart"></span>
+                </div>
                 <div class="connection-status" id="connectionStatus">Conectando...</div>
             </div>
             <div>
                 <div class="current-time" id="currentTime"></div>
+                <button class="logout-btn" onclick="logout()">🚪 Cerrar Sesión</button>
             </div>
-        </div>
-
-        <div class="time-info" id="timeInfo">
-            El sistema de turnos solo está disponible hasta las 5:00 PM.
         </div>
 
         <div class="main-content">
-            <div class="queue-section">
-                <h2 class="section-title">📋 Cola de Turnos</h2>
-                <button class="join-queue-btn" id="joinQueueBtn">🚀 Unirse a la Cola</button>
-                <button class="leave-queue-btn" id="leaveQueueBtn" style="display: none;">❌ Salir de la Cola</button>
-                <div class="queue-list" id="queueList">
-                    <div class="loading">
-                        <div class="loading-spinner"></div>
-                        <div>Conectando con Firebase...</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="controls-section">
-                <h2 class="section-title">⏰ Control de Tiempo</h2>
-                <div class="timer-display">
-                    <div class="timer-time" id="timerDisplay">15:00</div>
-                    <div class="timer-label">Tiempo restante</div>
-                </div>
-                <div class="timer-controls">
-                    <button class="timer-btn pause" id="pauseBtn" disabled>⏸️ Pausar</button>
-                    <button class="timer-btn resume" id="resumeBtn" disabled>▶️ Reanudar</button>
-                </div>
-                <div class="stats-section">
-                    <div class="stats-title">📊 Estadísticas</div>
-                    <div class="stats-item">
-                        <span>Gestores en cola:</span>
-                        <span id="queueCount">0</span>
-                    </div>
-                    <div class="stats-item">
-                        <span>Turno actual:</span>
-                        <span id="currentTurn">Ninguno</span>
-                    </div>
-                    <div class="stats-item">
-                        <span>Tu posición:</span>
-                        <span id="userPosition">No en cola</span>
-                    </div>
-                    <div class="stats-item">
-                        <span>Tiempo estimado:</span>
-                        <span id="estimatedTime">--</span>
-                    </div>
+            <h2 style="text-align: center; color: #2c3e50; margin-bottom: 20px;">
+                🔒 Sesión Única Activa
+            </h2>
+            <p style="text-align: center; color: #666; font-size: 1.1em;">
+                Tu sesión está protegida. Ningún otro dispositivo puede acceder con tu usuario mientras estés conectado.
+            </p>
+            <div style="text-align: center; margin-top: 20px;">
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; display: inline-block;">
+                    <p><strong>Usuario:</strong> <span id="displayUserName"></span></p>
+                    <p><strong>Sesión ID:</strong> <span id="displaySessionId"></span></p>
+                    <p><strong>Estado:</strong> <span style="color: #28a745;">🟢 Activo y Seguro</span></p>
                 </div>
             </div>
         </div>
@@ -577,18 +378,23 @@
             measurementId: "G-GV4JVLKEFY"
         };
 
-        // Variables globales
+        // Variables globales para sesión única
         let currentUser = null;
         let sessionId = null;
-        let queue = [];
-        let currentTurn = null;
-        let timerInterval = null;
+        let sessionStartTime = null;
+        let heartbeatInterval = null;
+        let sessionCheckInterval = null;
         let isConnected = false;
-        const TURN_DURATION = 15 * 60; // 15 minutos en segundos
+        let isLoggingIn = false;
+
+        // Constantes de configuración
         const PREDEFINED_USERS = ["Ana Pérez", "Carlos Gómez", "María Rodríguez", "Juan López", "Laura Martínez"];
+        const HEARTBEAT_INTERVAL = 30000; // 30 segundos
+        const SESSION_TIMEOUT = 300000; // 5 minutos
+        const SESSION_CHECK_INTERVAL = 10000; // 10 segundos
 
         // Referencias de Firebase
-        let database, activeUsersRef, queueRef, turnoActualRef, connectedRef;
+        let database, activeSessionsRef, connectedRef;
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', initializeApp);
@@ -598,52 +404,67 @@
                 if (!window.firebase || !window.firebase.app || !window.firebase.database) {
                     throw new Error('Firebase SDK no cargado correctamente.');
                 }
+                
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
-                activeUsersRef = database.ref('activeUsers');
-                queueRef = database.ref('queue');
-                turnoActualRef = database.ref('turnoActual');
+                activeSessionsRef = database.ref('activeSessions');
                 connectedRef = database.ref('.info/connected');
 
-                await cleanupResidualState();
+                // Limpiar sesiones residuales
+                await cleanupResidualSessions();
+                
+                // Configurar listeners
                 setupConnectionListener();
                 setupLoginUI();
                 updateCurrentTime();
                 setInterval(updateCurrentTime, 1000);
+                
+                showNotification('Sistema inicializado correctamente', 'success');
             } catch (error) {
                 console.error('Error inicializando:', error);
                 showErrorScreen(`Error al inicializar: ${error.message}`);
             }
         }
 
-        async function cleanupResidualState() {
+        async function cleanupResidualSessions() {
             try {
                 const lastUser = localStorage.getItem('lastUser');
-                if (lastUser) {
-                    await Promise.all([
-                        activeUsersRef.child(lastUser).remove(),
-                        queueRef.child(lastUser).remove(),
-                        turnoActualRef.once('value').then(snapshot => {
-                            if (snapshot.exists() && snapshot.val().userId === lastUser) {
-                                return turnoActualRef.remove();
-                            }
-                        })
-                    ]);
+                const lastSessionId = localStorage.getItem('lastSessionId');
+                
+                if (lastUser && lastSessionId) {
+                    await activeSessionsRef.child(lastUser).transaction(current => {
+                        if (current && current.sessionId === lastSessionId) {
+                            return null; // Eliminar la sesión
+                        }
+                        return current;
+                    });
+                    
                     localStorage.removeItem('lastUser');
+                    localStorage.removeItem('lastSessionId');
                 }
-                // Limpiar usuarios activos obsoletos
-                const snapshot = await activeUsersRef.once('value');
+
+                // Limpiar sesiones expiradas
+                const now = Date.now();
+                const snapshot = await activeSessionsRef.once('value');
+                
                 if (snapshot.exists()) {
-                    const now = Date.now();
-                    snapshot.forEach(child => {
-                        const data = child.val();
-                        if (!PREDEFINED_USERS.includes(data.user) || (now - data.lastActive) > 2 * 60 * 1000) {
-                            child.ref.remove();
+                    const sessions = snapshot.val();
+                    const updates = {};
+                    
+                    Object.keys(sessions).forEach(userId => {
+                        const session = sessions[userId];
+                        if (now - session.lastHeartbeat > SESSION_TIMEOUT) {
+                            updates[userId] = null;
                         }
                     });
+                    
+                    if (Object.keys(updates).length > 0) {
+                        await activeSessionsRef.update(updates);
+                        console.log('Sesiones expiradas limpiadas:', Object.keys(updates));
+                    }
                 }
             } catch (error) {
-                console.error('Error en limpieza inicial:', error);
+                console.error('Error en limpieza de sesiones:', error);
             }
         }
 
@@ -651,392 +472,301 @@
             connectedRef.on('value', snap => {
                 isConnected = snap.val();
                 updateConnectionStatus();
-                if (isConnected && currentUser) {
-                    setupDataListeners();
-                    activeUsersRef.child(currentUser).update({ lastActive: Date.now() });
+                
+                if (isConnected && currentUser && sessionId) {
+                    // Reiniciar heartbeat si se reconecta
+                    startHeartbeat();
                 }
-            });
-        }
-
-        function setupDataListeners() {
-            queueRef.orderByChild('joinTime').on('value', snapshot => {
-                queue = snapshot.exists() ? Object.values(snapshot.val()).sort((a, b) => a.joinTime - b.joinTime) : [];
-                updateDisplay();
-            }, error => {
-                console.error('Error en listener de cola:', error);
-                showNotification(`Error en cola: ${error.message}`, 'error');
-            });
-
-            turnoActualRef.on('value', snapshot => {
-                currentTurn = snapshot.exists() ? snapshot.val() : null;
-                syncTimer();
-                updateDisplay();
-                if (!currentTurn && queue.some(u => u.status === 'esperando')) {
-                    startNextTurn();
-                }
-            }, error => {
-                console.error('Error en listener de turno:', error);
-                showNotification(`Error en turno: ${error.message}`, 'error');
             });
         }
 
         function setupLoginUI() {
             const userSelect = document.getElementById('userSelect');
             userSelect.innerHTML = '<option value="" disabled selected>Selecciona tu usuario</option>';
+            
             PREDEFINED_USERS.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user;
                 option.textContent = user;
                 userSelect.appendChild(option);
             });
+            
             document.getElementById('loginModal').style.display = 'flex';
             document.getElementById('loginButton').onclick = handleLoginClick;
         }
 
         async function handleLoginClick() {
+            if (isLoggingIn) return;
+            
             const userSelect = document.getElementById('userSelect');
             const selectedUser = userSelect.value;
             const userError = document.getElementById('userError');
+            const userWarning = document.getElementById('userWarning');
+            const loginButton = document.getElementById('loginButton');
+            const loginButtonText = document.getElementById('loginButtonText');
+            
+            // Limpiar mensajes previos
             userError.style.display = 'none';
+            userWarning.style.display = 'none';
 
             if (!selectedUser || !PREDEFINED_USERS.includes(selectedUser)) {
-                userError.textContent = 'Selecciona un usuario válido';
-                userError.style.display = 'block';
+                showError('Selecciona un usuario válido');
                 return;
             }
 
+            if (!isConnected) {
+                showError('Sin conexión al servidor. Verifica tu conexión a internet.');
+                return;
+            }
+
+            isLoggingIn = true;
+            loginButton.disabled = true;
+            loginButtonText.innerHTML = '<span class="loading-spinner"></span>Verificando sesión...';
+
             try {
-                await handleLogin(selectedUser);
+                await handleUniqueLogin(selectedUser);
             } catch (error) {
-                userError.textContent = error.message;
-                userError.style.display = 'block';
+                showError(error.message);
                 console.error('Error en login:', error);
+            } finally {
+                isLoggingIn = false;
+                loginButton.disabled = false;
+                loginButtonText.textContent = '🚀 Iniciar Sesión';
             }
         }
 
-        async function handleLogin(selectedUser) {
-            if (!isConnected) throw new Error('Sin conexión al servidor');
-
-            // Verificar si el usuario ya está conectado
-            const userSnapshot = await activeUsersRef.child(selectedUser).once('value');
-            if (userSnapshot.exists()) {
-                throw new Error('Usuario ya está conectado');
-            }
-
-            sessionId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            const result = await activeUsersRef.child(selectedUser).transaction(current => {
-                if (current) return undefined;
-                return { user: selectedUser, sessionId, lastActive: Date.now() };
+        async function handleUniqueLogin(selectedUser) {
+            // Generar ID de sesión único
+            const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${selectedUser.replace(/\s+/g, '')}`;
+            
+            // Verificar y crear sesión atómica
+            const result = await activeSessionsRef.child(selectedUser).transaction(currentSession => {
+                const now = Date.now();
+                
+                // Si no hay sesión activa, crear una nueva
+                if (!currentSession) {
+                    return {
+                        userId: selectedUser,
+                        sessionId: newSessionId,
+                        loginTime: now,
+                        lastHeartbeat: now,
+                        userAgent: navigator.userAgent,
+                        ipAddress: 'unknown', // En producción, obtener la IP real
+                        isActive: true
+                    };
+                }
+                
+                // Si hay una sesión pero está expirada, reemplazarla
+                if (now - currentSession.lastHeartbeat > SESSION_TIMEOUT) {
+                    return {
+                        userId: selectedUser,
+                        sessionId: newSessionId,
+                        loginTime: now,
+                        lastHeartbeat: now,
+                        userAgent: navigator.userAgent,
+                        ipAddress: 'unknown',
+                        isActive: true,
+                        previousSession: {
+                            sessionId: currentSession.sessionId,
+                            endTime: now,
+                            reason: 'session_timeout'
+                        }
+                    };
+                }
+                
+                // Si hay una sesión activa, no permitir el login
+                return undefined;
             });
 
             if (!result.committed) {
-                throw new Error('Usuario ya está conectado');
+                throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Solo se permite una sesión por usuario.`);
             }
 
+            // Login exitoso
             currentUser = selectedUser;
+            sessionId = newSessionId;
+            sessionStartTime = Date.now();
+            
+            // Guardar en localStorage para cleanup
             localStorage.setItem('lastUser', currentUser);
+            localStorage.setItem('lastSessionId', sessionId);
+            
+            // Configurar UI
             document.getElementById('userName').textContent = currentUser;
+            document.getElementById('displayUserName').textContent = currentUser;
+            document.getElementById('displaySessionId').textContent = sessionId.substr(-8);
+            document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-ES');
+            
+            // Ocultar modal y mostrar contenido principal
             document.getElementById('loginModal').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
-            setupDataListeners();
-            setupActionButtons();
-            checkBusinessHours();
-            showNotification(`¡Bienvenido ${currentUser}!`, 'success');
+            
+            // Iniciar sistemas de mantenimiento de sesión
+            startHeartbeat();
+            startSessionMonitoring();
+            
+            showNotification(`¡Bienvenido ${currentUser}! Sesión única iniciada.`, 'success');
+        }
+
+        function startHeartbeat() {
+            // Limpiar heartbeat anterior si existe
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+            
+            // Enviar heartbeat inmediatamente
+            sendHeartbeat();
+            
+            // Configurar heartbeat periódico
+            heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+        }
+
+        async function sendHeartbeat() {
+            if (!currentUser || !sessionId || !isConnected) return;
+            
+            try {
+                const heartbeatData = {
+                    lastHeartbeat: Date.now(),
+                    isActive: true
+                };
+                
+                // Verificar que la sesión sigue siendo válida
+                const result = await activeSessionsRef.child(currentUser).transaction(currentSession => {
+                    if (!currentSession || currentSession.sessionId !== sessionId) {
+                        return undefined; // Sesión no válida
+                    }
+                    return { ...currentSession, ...heartbeatData };
+                });
+                
+                if (!result.committed) {
+                    // Sesión invalidada, forzar logout
+                    await forceLogout('Sesión invalidada por otra conexión');
+                }
+            } catch (error) {
+                console.error('Error enviando heartbeat:', error);
+                if (error.code === 'PERMISSION_DENIED') {
+                    await forceLogout('Permisos insuficientes');
+                }
+            }
+        }
+
+        function startSessionMonitoring() {
+            // Monitorear cambios en la sesión
+            if (currentUser) {
+                activeSessionsRef.child(currentUser).on('value', snapshot => {
+                    if (!snapshot.exists()) {
+                        forceLogout('Sesión eliminada externamente');
+                        return;
+                    }
+                    
+                    const sessionData = snapshot.val();
+                    if (sessionData.sessionId !== sessionId) {
+                        forceLogout('Nueva sesión detectada desde otro dispositivo');
+                    }
+                }, error => {
+                    console.error('Error monitoreando sesión:', error);
+                });
+            }
+            
+            // Verificar sesión periódicamente
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+            }
+            
+            sessionCheckInterval = setInterval(checkSessionValidity, SESSION_CHECK_INTERVAL);
+        }
+
+        async function checkSessionValidity() {
+            if (!currentUser || !sessionId) return;
+            
+            try {
+                const snapshot = await activeSessionsRef.child(currentUser).once('value');
+                
+                if (!snapshot.exists()) {
+                    await forceLogout('Sesión no encontrada');
+                    return;
+                }
+                
+                const sessionData = snapshot.val();
+                if (sessionData.sessionId !== sessionId) {
+                    await forceLogout('ID de sesión no coincide');
+                    return;
+                }
+                
+                // Verificar si la sesión ha expirado
+                const now = Date.now();
+                if (now - sessionData.lastHeartbeat > SESSION_TIMEOUT) {
+                    await forceLogout('Sesión expirada por inactividad');
+                }
+            } catch (error) {
+                console.error('Error verificando sesión:', error);
+            }
         }
 
         async function logout() {
             try {
-                if (currentUser) {
-                    await Promise.all([
-                        queueRef.child(currentUser).remove(),
-                        activeUsersRef.child(currentUser).remove(),
-                        currentTurn && currentTurn.userId === currentUser ? turnoActualRef.remove() : Promise.resolve()
-                    ]);
-                    localStorage.removeItem('lastUser');
-                    currentUser = null;
-                    sessionId = null;
-                    document.getElementById('mainContainer').style.display = 'none';
-                    setupLoginUI();
+                if (currentUser && sessionId) {
+                    // Marcar sesión como terminada
+                    await activeSessionsRef.child(currentUser).update({
+                        isActive: false,
+                        logoutTime: Date.now(),
+                        logoutReason: 'user_logout'
+                    });
+                    
+                    // Eliminar la sesión después de un breve delay
+                    setTimeout(async () => {
+                        try {
+                            await activeSessionsRef.child(currentUser).remove();
+                        } catch (error) {
+                            console.error('Error eliminando sesión:', error);
+                        }
+                    }, 2000);
                 }
+                
+                await cleanupSession();
+                showNotification('Sesión cerrada correctamente', 'success');
             } catch (error) {
                 console.error('Error al cerrar sesión:', error);
+                showNotification('Error al cerrar sesión', 'error');
+                await cleanupSession(); // Limpiar de todas formas
             }
         }
 
-        function setupActionButtons() {
-            document.getElementById('joinQueueBtn').onclick = joinQueue;
-            document.getElementById('leaveQueueBtn').onclick = leaveQueue;
-            document.getElementById('pauseBtn').onclick = pauseTimer;
-            document.getElementById('resumeBtn').onclick = resumeTimer;
+        async function forceLogout(reason) {
+            console.warn('Logout forzado:', reason);
+            showNotification(`Sesión terminada: ${reason}`, 'warning');
+            await cleanupSession();
         }
 
-        async function joinQueue() {
-            try {
-                if (!isConnected) throw new Error('Sin conexión');
-                if (!currentUser) throw new Error('No estás autenticado');
-                if (new Date().getHours() >= 17) throw new Error('Fuera de horario (hasta 5:00 PM)');
-
-                // Verificar si el usuario ya está en la cola
-                const userSnapshot = await queueRef.child(currentUser).once('value');
-                if (userSnapshot.exists()) {
-                    const userData = userSnapshot.val();
-                    if (userData.status === 'esperando' || userData.status === 'activo') {
-                        throw new Error('Ya estás en la cola');
-                    }
-                    if (userData.status === 'completado') {
-                        await queueRef.child(currentUser).remove();
-                    }
-                }
-
-                // Verificar si la cola está vacía y no hay turno activo
-                const [queueSnapshot, turnoSnapshot] = await Promise.all([
-                    queueRef.once('value'),
-                    turnoActualRef.once('value')
-                ]);
-                const isQueueEmpty = !queueSnapshot.exists() || Object.keys(queueSnapshot.val() || {}).length === 0;
-                const noActiveTurn = !turnoSnapshot.exists();
-
-                if (isQueueEmpty && noActiveTurn) {
-                    // Asignar turno directamente
-                    const result = await turnoActualRef.transaction(current => {
-                        if (current) return undefined;
-                        return {
-                            userId: currentUser,
-                            user: currentUser,
-                            startTime: Date.now(),
-                            remainingSeconds: TURN_DURATION,
-                            isPaused: false,
-                            lastUpdate: Date.now()
-                        };
-                    });
-
-                    if (result.committed) {
-                        await queueRef.child(currentUser).set({
-                            userId: currentUser,
-                            user: currentUser,
-                            joinTime: Date.now(),
-                            status: 'activo'
-                        });
-                        showNotification('Turno iniciado inmediatamente', 'success');
-                    } else {
-                        throw new Error('No se pudo asignar el turno');
-                    }
-                } else {
-                    // Agregar a la cola en espera
-                    await queueRef.child(currentUser).set({
-                        userId: currentUser,
-                        user: currentUser,
-                        joinTime: Date.now(),
-                        status: 'esperando'
-                    });
-                    showNotification('Te has unido a la cola', 'success');
-                }
-            } catch (error) {
-                console.error('Error al unirse a la cola:', error);
-                showNotification(`Error: ${error.message}`, 'error');
+        async function cleanupSession() {
+            // Limpiar intervalos
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
             }
-        }
-
-        async function leaveQueue() {
-            try {
-                if (!currentUser) throw new Error('No estás autenticado');
-                if (!isConnected) throw new Error('Sin conexión');
-
-                const userSnapshot = await queueRef.child(currentUser).once('value');
-                if (!userSnapshot.exists()) {
-                    showNotification('No estás en la cola', 'warning');
-                    return;
-                }
-
-                if (currentTurn && currentTurn.userId === currentUser) {
-                    await turnoActualRef.remove();
-                }
-                await queueRef.child(currentUser).remove();
-                showNotification('Has salido de la cola', 'success');
-            } catch (error) {
-                console.error('Error al salir de la cola:', error);
-                showNotification(`Error: ${error.message}`, 'error');
+            
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+                sessionCheckInterval = null;
             }
-        }
-
-        async function startNextTurn() {
-            try {
-                const snapshot = await turnoActualRef.once('value');
-                if (snapshot.exists()) return;
-
-                const queueSnapshot = await queueRef.orderByChild('joinTime').once('value');
-                const waitingUsers = queueSnapshot.exists()
-                    ? Object.values(queueSnapshot.val()).filter(u => u.status === 'esperando')
-                    : [];
-                if (waitingUsers.length === 0) return;
-
-                const nextUser = waitingUsers.sort((a, b) => a.joinTime - b.joinTime)[0];
-                const result = await turnoActualRef.transaction(current => {
-                    if (current) return undefined;
-                    return {
-                        userId: nextUser.userId,
-                        user: nextUser.user,
-                        startTime: Date.now(),
-                        remainingSeconds: TURN_DURATION,
-                        isPaused: false,
-                        lastUpdate: Date.now()
-                    };
-                });
-
-                if (result.committed) {
-                    await queueRef.child(nextUser.userId).update({ status: 'activo' });
-                    showNotification(`Turno iniciado para ${nextUser.user}`, 'success');
-                }
-            } catch (error) {
-                console.error('Error al iniciar turno:', error);
+            
+            // Limpiar listeners
+            if (currentUser) {
+                activeSessionsRef.child(currentUser).off();
             }
-        }
-
-        async function completeTurn() {
-            try {
-                if (!currentTurn) return;
-                const activeUserId = currentTurn.userId;
-
-                await Promise.all([
-                    queueRef.child(activeUserId).update({
-                        status: 'completado',
-                        completionTime: Date.now()
-                    }),
-                    turnoActualRef.remove(),
-                    queueRef.child(activeUserId).remove()
-                ]);
-                showNotification(`Turno completado para ${activeUserId}`, 'success');
-            } catch (error) {
-                console.error('Error al completar turno:', error);
-                showNotification(`Error al completar turno: ${error.message}`, 'error');
-            }
-        }
-
-        function syncTimer() {
-            clearInterval(timerInterval);
-            if (!currentTurn) {
-                updateTimerDisplay(TURN_DURATION);
-                document.getElementById('currentTurn').textContent = 'Ninguno';
-                return;
-            }
-
-            if (currentTurn.isPaused) {
-                updateTimerDisplay(currentTurn.remainingSeconds);
-                return;
-            }
-
-            let remainingSeconds = currentTurn.remainingSeconds - Math.floor((Date.now() - currentTurn.lastUpdate) / 1000);
-            if (remainingSeconds <= 0) {
-                completeTurn();
-                return;
-            }
-
-            updateTimerDisplay(remainingSeconds);
-            timerInterval = setInterval(() => {
-                remainingSeconds--;
-                updateTimerDisplay(remainingSeconds);
-                if (remainingSeconds <= 0) {
-                    clearInterval(timerInterval);
-                    completeTurn();
-                }
-                if (remainingSeconds % 10 === 0 && currentTurn.userId === currentUser) {
-                    turnoActualRef.update({
-                        remainingSeconds,
-                        lastUpdate: Date.now()
-                    }).catch(error => console.error('Error actualizando temporizador:', error));
-                }
-            }, 1000);
-        }
-
-        function updateTimerDisplay(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            document.getElementById('timerDisplay').textContent = `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        function updateDisplay() {
-            updateQueueDisplay();
-            updateStats();
-            updateButtons();
-        }
-
-        function updateQueueDisplay() {
-            const queueList = document.getElementById('queueList');
-            if (queue.length === 0) {
-                queueList.innerHTML = `
-                    <div class="empty-queue">
-                        <div class="empty-queue-icon">📜</div>
-                        <div>No hay gestores en la cola</div>
-                        <div style="margin-top: 10px; font-size: 0.9em;">¡Sé el primero en unirte!</div>
-                    </div>`;
-                return;
-            }
-
-            let htmlContent = '';
-            let waitingPosition = 1;
-            queue.forEach(gestor => {
-                const isActive = currentTurn && currentTurn.userId === gestor.userId;
-                const position = gestor.status === 'esperando' ? waitingPosition++ : '';
-                let statusText = {
-                    esperando: '⏳ En espera',
-                    activo: currentTurn?.isPaused ? '⏸️ En pausa' : '🟢 Activo',
-                    completado: '✅ Completado'
-                }[gestor.status];
-
-                const timeInfo = gestor.status === 'completado'
-                    ? `Completado: ${new Date(gestor.completionTime || gestor.joinTime).toLocaleString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
-                    : `Ingresado: ${new Date(gestor.joinTime).toLocaleTimeString('es-ES')}`;
-
-                htmlContent += `
-                    <div class="queue-item ${gestor.status === 'activo' ? 'active' : gestor.status === 'esperando' ? 'waiting' : 'completed'}">
-                        ${position ? `<div class="queue-position">${position}</div>` : ''}
-                        <div class="gestores-name">${gestor.user}</div>
-                        <div class="gestores-status">${statusText}</div>
-                        <div class="gestores-time">${timeInfo}</div>
-                    </div>`;
-            });
-            queueList.innerHTML = htmlContent;
-        }
-
-        function updateStats() {
-            document.getElementById('queueCount').textContent = queue.filter(g => g.status === 'esperando').length;
-            document.getElementById('currentTurn').textContent = currentTurn ? currentTurn.user : 'Ninguno';
-
-            const userInQueue = queue.find(g => g.userId === currentUser);
-            if (!userInQueue) {
-                document.getElementById('userPosition').textContent = 'No en cola';
-                document.getElementById('estimatedTime').textContent = '--';
-                return;
-            }
-
-            if (userInQueue.status === 'activo') {
-                document.getElementById('userPosition').textContent = 'En turno';
-                document.getElementById('estimatedTime').textContent = 'Ahora';
-            } else if (userInQueue.status === 'esperando') {
-                const position = queue.filter(g => g.status === 'esperando').findIndex(g => g.userId === currentUser) + 1;
-                const estimatedMinutes = (position - 1) * 15;
-                document.getElementById('userPosition').textContent = `#${position}`;
-                document.getElementById('estimatedTime').textContent = estimatedMinutes > 0 ? `~${estimatedMinutes} min` : 'Próximo';
-            } else {
-                document.getElementById('userPosition').textContent = 'Completado';
-                document.getElementById('estimatedTime').textContent = '--';
-            }
-        }
-
-        function updateButtons() {
-            const userInQueue = queue.find(g => g.userId === currentUser);
-            const joinBtn = document.getElementById('joinQueueBtn');
-            const leaveBtn = document.getElementById('leaveQueueBtn');
-            const pauseBtn = document.getElementById('pauseBtn');
-            const resumeBtn = document.getElementById('resumeBtn');
-
-            joinBtn.style.display = userInQueue && userInQueue.status !== 'completado' ? 'none' : 'block';
-            leaveBtn.style.display = userInQueue && userInQueue.status !== 'completado' ? 'block' : 'none';
-            leaveBtn.disabled = !isConnected;
-
-            const isUserTurn = currentTurn && currentTurn.userId === currentUser;
-            pauseBtn.disabled = !isUserTurn || currentTurn?.isPaused || !isConnected;
-            resumeBtn.disabled = !isUserTurn || !currentTurn?.isPaused || !isConnected;
+            
+            // Limpiar variables
+            currentUser = null;
+            sessionId = null;
+            sessionStartTime = null;
+            
+            // Limpiar localStorage
+            localStorage.removeItem('lastUser');
+            localStorage.removeItem('lastSessionId');
+            
+            // Resetear UI
+            document.getElementById('mainContainer').style.display = 'none';
+            setupLoginUI();
         }
 
         function updateConnectionStatus() {
@@ -1046,56 +776,22 @@
         }
 
         function updateCurrentTime() {
-            document.getElementById('currentTime').textContent = new Date().toLocaleString('es-ES', {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleString('es-ES', {
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit'
             });
         }
 
-        function checkBusinessHours() {
-            const hours = new Date().getHours();
-            const timeInfo = document.getElementById('timeInfo');
-            const joinBtn = document.getElementById('joinQueueBtn');
-            if (hours >= 17) {
-                timeInfo.style.display = 'block';
-                joinBtn.disabled = true;
-                joinBtn.textContent = 'Fuera de horario';
-            } else {
-                timeInfo.style.display = 'none';
-                joinBtn.disabled = false;
-                joinBtn.textContent = '🚀 Unirse a la Cola';
-            }
-        }
-
-        async function pauseTimer() {
-            if (!currentTurn || currentTurn.userId !== currentUser) return;
-            try {
-                const now = Date.now();
-                const elapsed = Math.floor((now - currentTurn.lastUpdate) / 1000);
-                await turnoActualRef.update({
-                    isPaused: true,
-                    remainingSeconds: Math.max(0, currentTurn.remainingSeconds - elapsed),
-                    lastUpdate: now
-                });
-                showNotification('Temporizador pausado', 'warning');
-            } catch (error) {
-                console.error('Error al pausar:', error);
-                showNotification(`Error al pausar: ${error.message}`, 'error');
-            }
-        }
-
-        async function resumeTimer() {
-            if (!currentTurn || currentTurn.userId !== currentUser) return;
-            try {
-                await turnoActualRef.update({
-                    isPaused: false,
-                    lastUpdate: Date.now()
-                });
-                showNotification('Temporizador reanudado', 'success');
-            } catch (error) {
-                console.error('Error al reanudar:', error);
-                showNotification(`Error al reanudar: ${error.message}`, 'error');
-            }
+        function showError(message) {
+            const errorElement = document.getElementById('userError');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
         }
 
         function showNotification(message, type = 'success') {
@@ -1103,26 +799,54 @@
             notification.textContent = message;
             notification.className = `notification ${type}`;
             notification.classList.add('show');
-            setTimeout(() => notification.classList.remove('show'), 3000);
+            setTimeout(() => notification.classList.remove('show'), 4000);
         }
 
         function showErrorScreen(message) {
             document.body.innerHTML = `
-                <div class="error-container">
-                    <h2>Error</h2>
-                    <p>${message}</p>
-                    <button onclick="window.location.reload()">Reintentar</button>
+                <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f8f9fa;">
+                    <div style="background: white; padding: 40px; border-radius: 15px; text-align: center; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+                        <h2 style="color: #dc3545; margin-bottom: 20px;">❌ Error del Sistema</h2>
+                        <p style="color: #666; margin-bottom: 30px;">${message}</p>
+                        <button onclick="window.location.reload()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 1.1em;">
+                            🔄 Reintentar
+                        </button>
+                    </div>
                 </div>`;
         }
 
-        window.addEventListener('beforeunload', async () => {
-            if (currentUser && database) {
-                await Promise.all([
-                    queueRef.child(currentUser).remove(),
-                    activeUsersRef.child(currentUser).remove(),
-                    currentTurn && currentTurn.userId === currentUser ? turnoActualRef.remove() : Promise.resolve()
-                ]).catch(error => console.error('Error en cleanup:', error));
+        // Manejo de cierre de ventana/pestaña
+        window.addEventListener('beforeunload', async (event) => {
+            if (currentUser && sessionId) {
+                // Intentar cleanup síncrono
+                try {
+                    await activeSessionsRef.child(currentUser).update({
+                        isActive: false,
+                        logoutTime: Date.now(),
+                        logoutReason: 'window_close'
+                    });
+                } catch (error) {
+                    console.error('Error en cleanup de beforeunload:', error);
+                }
+                
                 localStorage.removeItem('lastUser');
+                localStorage.removeItem('lastSessionId');
+            }
+        });
+
+        // Detectar cambios de visibilidad para pausar/reanudar heartbeat
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Página oculta, reducir frecuencia de heartbeat
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL * 2);
+                }
+            } else {
+                // Página visible, restaurar heartbeat normal
+                if (currentUser && sessionId) {
+                    startHeartbeat();
+                }
             }
         });
     </script>
