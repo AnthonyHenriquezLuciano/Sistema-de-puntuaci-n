@@ -1053,27 +1053,25 @@
 
         async function handleUniqueLogin(selectedUser) {
             console.log(`Intentando login para ${selectedUser}`);
+            // Check if an active session exists for the user
+            const sessionSnapshot = await activeSessionsRef.child(selectedUser).once('value');
+            if (sessionSnapshot.exists()) {
+                throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Por favor, cierra la sesión existente antes de iniciar una nueva.`);
+            }
+
+            // Proceed with creating a new session
             const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${selectedUser.replace(/\s+/g, '')}`;
             const now = Date.now();
-            const result = await activeSessionsRef.child(selectedUser).transaction(currentSession => {
-                if (currentSession) {
-                    console.log(`Sesión activa encontrada para ${selectedUser}`);
-                    return undefined;
-                }
-                console.log(`Creando nueva sesión para ${selectedUser}, sessionId: ${newSessionId}`);
-                return {
-                    userId: selectedUser,
-                    sessionId: newSessionId,
-                    loginTime: now,
-                    lastHeartbeat: now,
-                    userAgent: navigator.userAgent,
-                    ipAddress: 'unknown',
-                    isActive: true
-                };
+            await activeSessionsRef.child(selectedUser).set({
+                userId: selectedUser,
+                sessionId: newSessionId,
+                loginTime: now,
+                lastHeartbeat: now,
+                userAgent: navigator.userAgent,
+                ipAddress: 'unknown',
+                isActive: true
             });
-            if (!result.committed) {
-                throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Cierra la sesión existente antes de iniciar una nueva.`);
-            }
+
             currentUser = selectedUser;
             sessionId = newSessionId;
             sessionStartTime = now;
