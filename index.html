@@ -55,7 +55,7 @@
 
         .user-welcome {
             font-size: 1.2em;
-            color: #333;
+            color: #2c3e50;
         }
 
         .user-name {
@@ -115,7 +115,7 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
+            z-index: 2000;
             justify-content: center;
             align-items: center;
         }
@@ -131,7 +131,7 @@
         }
 
         .login-content h2 {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
             color: #2c3e50;
             font-size: 1.8em;
         }
@@ -200,20 +200,20 @@
             border-radius: 8px;
             margin-bottom: 20px;
             display: none;
-            border: 1px solid #ffeeaa;
+            border: 1px solid #ffeaa7;
         }
 
         .session-details {
             background: #f8f9fa;
             padding: 15px;
-            border-radius: 10px;
+            border-radius: 8px;
             margin-top: 20px;
             text-align: left;
         }
 
         .session-details h4 {
-            margin-bottom: 10px;
             color: #2c3e50;
+            margin-bottom: 10px;
         }
 
         .session-details p {
@@ -226,8 +226,8 @@
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-right: 10px;
@@ -240,7 +240,7 @@
 
         .main-content {
             background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             border-radius: 20px;
             padding: 30px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
@@ -264,10 +264,6 @@
         .notification.show {
             transform: translateX(0);
             opacity: 1;
-        }
-
-        .notification.success {
-            background: #28a745;
         }
 
         .notification.warning {
@@ -294,17 +290,75 @@
             50% { transform: scale(1.2); opacity: 0.7; }
         }
 
-        /* Estilos para el sistema de cola */
         .queue-panel {
             background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
             border-radius: 20px;
             padding: 30px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
             margin-top: 30px;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .queue-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .active-user-panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .active-user-panel h3 {
+            color: #2c3e50;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+        }
+
+        .timer-clock {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin: 20px auto;
+        }
+
+        .timer-circle {
+            fill: none;
+            stroke: #ddd;
+            stroke-width: 10;
+        }
+
+        .timer-progress {
+            fill: none;
+            stroke: url(#timerGradient);
+            stroke-width: 10;
+            stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: center;
+            transition: stroke-dashoffset 0.5s linear;
+        }
+
+        .timer-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
         }
 
         .timer-controls {
             margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
         }
 
         .timer-btn {
@@ -314,8 +368,11 @@
             padding: 10px 20px;
             border-radius: 8px;
             cursor: pointer;
-            margin: 0 5px;
+            font-size: 1em;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .timer-btn:hover {
@@ -330,25 +387,77 @@
             box-shadow: none;
         }
 
-        .queue-list ul {
-            list-style: none;
-            padding: 0;
+        .queue-table {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
         }
 
-        .queue-list li {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            font-size: 1.1em;
+        .queue-table h3 {
             color: #2c3e50;
+            font-size: 1.5em;
+            margin-bottom: 15px;
         }
 
-        .queue-list li:last-child {
-            border-bottom: none;
+        .queue-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        .queue-table th, .queue-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .queue-table th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: bold;
+        }
+
+        .queue-table tr:nth-child(even) {
+            background: rgba(238, 238, 238, 0.5);
+        }
+
+        .queue-table tr.current-user {
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: bold;
+        }
+
+        .join-queue-btn {
+            background: linear-gradient(135deg, #28a745, #218838);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+
+        .join-queue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .queue-table tr {
+            animation: fadeIn 0.3s ease-in;
         }
     </style>
 </head>
 <body>
-    <!-- Modal de Inicio de Sesión -->
+    <!-- Modal de inicio de sesión -->
     <div class="login-modal" id="loginModal">
         <div class="login-content">
             <h2>🔐 Inicio de Sesión Seguro</h2>
@@ -357,10 +466,9 @@
             <div class="warning-message" id="userWarning"></div>
             <select class="login-input" id="userSelect">
                 <option value="" disabled selected>Selecciona tu usuario</option>
-                
             </select>
-            <button class="login-btn" id="loginBtn">
-                <span id="loginButtonText">🚖 Iniciar Sesión</span>
+            <button class="login-btn" id="loginButton">
+                <span id="loginButtonText">🚀 Iniciar Sesión</span>
             </button>
             <div class="session-details">
                 <h4>🛡️ Características de Seguridad:</h4>
@@ -368,716 +476,787 @@
                 <p>• Detección automática de sesiones múltiples</p>
                 <p>• Heartbeat para mantener la conexión</p>
                 <p>• Limpieza automática al cerrar sesión</p>
-                
             </div>
-            
         </div>
-        
-        </div>
+    </div>
 
-        <div class="container" id="mainContainer" style="display: none;">
-            <div class="header">
-                <h1>🎯 Sistema de Turnos</h1>
-                <p>Gestión de turnos con sesión única - Máxima seguridad</p>
-            </div>
-            <div class="user-info">
-                <div class="user-welcome">
-                    <div>
-                        <span class="heartbeat-indicator"></span>
-                        ¡Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
-                    </div>
-                    <div class="session-info" id="sessionInfo">
-                        Sesión iniciada: <span id="sessionStartTime"></span>
-                    </div>
-                    <div class="connection-status" id="connectionStatus">Conectando...</div>
-                </div>
-                <div>
-                    <div class="current-time" id="currentTime"></div>
-                    <button class="logout-btn" onclick="logout()">🚖 Cerrar Sesión</button>
-                </div>
-                
-            </div>
-            
-            <div class="main-content">
-                <h2 style="text-align: center; color: #2c3e50; margin-bottom: 20px;">
-                    🔒 Sesión Única Activa
-                </h2>
-                <p style="text-align: center; color: #666; font-size: 1.1em;">
-                    Tu sesión está protegida. Ningún otro dispositivo puede acceder con tu usuario mientras estés conectado.
-                </p>
-                
-                <!-- Panel de Cola y Turnos -->
-                <div class="queue-panel">
-                    <div class="active-user">
-                        <h3>Usuario Activo</h3>
-                        <div id="activeUserInfo">Nadie activo</div>
-                        <div id="timer"></div>
-                        <div id="timerControls" class="timer-controls"></div>
-                    </div>
-                    <div class="queue-list" style="margin-top: 20px;">
-                        <h3>Cola de Espera</h3>
-                        <ul id="queueList"></ul>
-                        <button id="joinQueueBtn" class="timer-btn" style="margin-top: 10px;">📝 Unirse a la Cola</button>
-                    </div>
-                    
-                </div>
-                
-            </div>
-            
+    <div class="container" id="mainContainer" style="display: none;">
+        <div class="header">
+            <h1>🎯 Sistema de Turnos</h1>
+            <p>Gestión inteligente con sesión única - Máxima seguridad</p>
         </div>
-        
-        <div class="notification" id="notification"></div>
-        <!-- Firebase SDK -->
-        <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-        <script>
-            // CONFIGURACIÓN DE FIREBASE
-            const firebaseConfig = {
-                apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-                authDomain: "sistema-turnos-gestores.firebaseapp.com",
-                databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-                projectId: "sistema-turnos-gestores",
-                storageBucket: "sistema-turnos-gestores.appspot.com",
-                messagingSenderId: "322320112231",
-                appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-                measurementId: "G-GV4JVLKEFY"
-            };
-            // Variables globales para sesión única
-            let currentUser = null;
-            let sessionId = null;
-            let sessionStartTime = null;
-            let heartbeatInterval = null;
-            let sessionCheckInterval = null;
-            let isConnected = false;
-            let isLoggingIn = false;
-            // Constantes de configuración
-            const PREDEFINED_USERS = ["Ana Pérez", "Carlos Gómez", "María Rodríguez", "Juan López", "Laura Martínez"];
-            const HEARTBEAT_INTERVAL = 30000; // 30 segundos
-            const SESSION_CHECK_INTERVAL = 10000; // 10 segundos
-            const MAX_HEARTBEAT_RETRIES = 3; // Máximo de reintentos para heartbeat
-            const TURN_TIME = 15 * 60; // 15 minutos en segundos
-            // Referencias de Firebase
-            let database, activeSessionsRef, connectedRef, queueRef, activeUserRef;
-            // Variables para el sistema de turnos
-            let timerInterval = null;
-            // Rutas de Firebase para la cola
-            const QUEUE_PATH = 'queueSystem/queue';
-            const ACTIVE_USER_PATH = 'queueSystem/activeUser';
-            // Inicialización
-            document.addEventListener('DOMContentLoaded', initializeApp);
-            async function initializeApp() {
-                try {
-                    if (!window.firebase || !window.firebase.app || !window.firebase.database) {
-                        throw new Error('Firebase SDK no cargado correctamente.');
-                    }
-                    firebase.initializeApp(firebaseConfig);
-                    database = firebase.database();
-                    activeSessionsRef = database.ref('activeSessions');
-                    connectedRef = database.ref('.info/connected');
-                    queueRef = database.ref(QUEUE_PATH);
-                    activeUserRef = database.ref(ACTIVE_USER_PATH);
-                    // Limpiar sesiones residuales
-                    await cleanupResidualSessions();
-                    // Configurar listeners
-                    setupConnectionListener();
-                    setupLoginUI();
-                    updateCurrentTime();
-                    setInterval(updateCurrentTime, 1000);
-                    // Configurar sistema de turnos
-                    setupQueueSystem();
-                    showNotification('Sistema inicializado correctamente', 'success');
-                } catch (error) {
-                    console.error('Error inicializando:', error);
-                    showErrorScreen(`Error al inicializar: ${error.message}`);
+        <div class="user-info">
+            <div class="user-welcome">
+                <div>
+                    <span class="heartbeat-indicator"></span>
+                    👋 Bienvenido/a, <span class="user-name" id="userName">Cargando...</span>
+                </div>
+                <div class="session-info" id="sessionInfo">
+                    Sesión iniciada: <span id="sessionStart"></span>
+                </div>
+                <div class="connection-status" id="connectionStatus">Conectando...</div>
+            </div>
+            <div>
+                <div class="current-time" id="currentTime"></div>
+                <button class="logout-btn" onclick="logout()">🚪 Cerrar Sesión</button>
+            </div>
+        </div>
+        <div class="main-content">
+            <!-- Panel de Cola y Turnos Mejorado -->
+            <div class="queue-panel">
+                <div class="active-user-panel">
+                    <h3>Usuario Activo</h3>
+                    <div id="activeUserInfo">Nadie activo</div>
+                    <div class="timer-clock">
+                        <svg width="150" height="150">
+                            <defs>
+                                <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                            <circle class="timer-circle" cx="75" cy="75" r="65" />
+                            <circle class="timer-progress" cx="75" cy="75" r="65" stroke-dasharray="408.4" stroke-dashoffset="408.4" id="timerProgress" />
+                        </svg>
+                        <div class="timer-text" id="timerText">15:00</div>
+                    </div>
+                    <div id="timerControls" class="timer-controls"></div>
+                </div>
+                <div class="queue-table">
+                    <h3>Cola de Espera</h3>
+                    <table id="queueList">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Usuario</th>
+                                <th>Hora de Ingreso</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <button id="joinQueueBtn" class="join-queue-btn">📝 Unirse a la Cola</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+    <script>
+        // CONFIGURACIÓN DE FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
+            authDomain: "sistema-turnos-gestores.firebaseapp.com",
+            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
+            projectId: "sistema-turnos-gestores",
+            storageBucket: "sistema-turnos-gestores.appspot.com",
+            messagingSenderId: "322320112231",
+            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
+            measurementId: "G-GV4JVLKEFY"
+        };
+
+        // Variables globales para sesión única
+        let currentUser = null;
+        let sessionId = null;
+        let sessionStartTime = null;
+        let heartbeatInterval = null;
+        let sessionCheckInterval = null;
+        let isConnected = false;
+        let isLoggingIn = false;
+
+        // Constantes de configuración
+        const PREDEFINED_USERS = ["Ana Pérez", "Carlos Gómez", "María Rodríguez", "Juan López", "Laura Martínez"];
+        const HEARTBEAT_INTERVAL = 30000; // 30 segundos
+        const SESSION_CHECK_INTERVAL = 10000; // 10 segundos
+        const MAX_HEARTBEAT_RETRIES = 3; // Máximo de reintentos para heartbeat
+        const TURN_TIME = 15 * 60; // 15 minutos en segundos
+
+        // Referencias de Firebase
+        let database, activeSessionsRef, connectedRef, queueRef, activeUserRef;
+
+        // Variables para el sistema de turnos
+        let timerInterval = null;
+
+        // Rutas de Firebase para la cola
+        const QUEUE_PATH = 'queueSystem/queue';
+        const ACTIVE_USER_PATH = 'queueSystem/activeUser';
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        async function initializeApp() {
+            try {
+                if (!window.firebase || !window.firebase.app || !window.firebase.database) {
+                    throw new Error('Firebase SDK no cargado correctamente.');
                 }
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                activeSessionsRef = database.ref('activeSessions');
+                connectedRef = database.ref('.info/connected');
+                queueRef = database.ref(QUEUE_PATH);
+                activeUserRef = database.ref(ACTIVE_USER_PATH);
+
+                // Limpiar sesiones residuales
+                await cleanupResidualSessions();
+                
+                // Configurar listeners
+                setupConnectionListener();
+                setupLoginUI();
+                updateCurrentTime();
+                setInterval(updateCurrentTime, 1000);
+                
+                // Configurar sistema de turnos
+                setupQueueSystem();
+
+                showNotification('Sistema inicializado correctamente', 'success');
+            } catch (error) {
+                console.error('Error inicializando:', error);
+                showErrorScreen(`Error al inicializar: ${error.message}`);
             }
-            // ---- SISTEMA DE TURNOS ----
-            function setupQueueSystem() {
-                setupQueueListeners();
-                const joinQueueBtn = document.getElementById('joinQueueBtn');
-                if (joinQueueBtn) {
-                    joinQueueBtn.onclick = joinQueue;
-                } else {
-                    console.error('Botón joinQueueBtn no encontrado');
-                }
+        }
+
+        // ---- SISTEMA DE TURNOS ----
+        function setupQueueSystem() {
+            setupQueueListeners();
+            const joinQueueBtn = document.getElementById('joinQueueBtn');
+            if (joinQueueBtn) {
+                joinQueueBtn.onclick = joinQueue;
+            } else {
+                console.error('Botón joinQueueBtn no encontrado');
             }
-            function joinQueue() {
-                if (!currentUser) {
-                    showNotification('Debes iniciar sesión para unirte a la cola', 'warning');
+        }
+
+        async function joinQueue() {
+            if (!currentUser) {
+                showNotification('Debes iniciar sesión para unirte a la cola', 'warning');
+                return;
+            }
+            try {
+                // Verificar si el usuario es el activo
+                const activeUserSnapshot = await activeUserRef.once('value');
+                if (activeUserSnapshot.exists() && activeUserSnapshot.val().userId === currentUser) {
+                    showNotification('No puedes unirte a la cola mientras estás activo', 'warning');
                     return;
                 }
-                queueRef.once('value').then(snapshot => {
-                    const queue = snapshot.val() || {};
-                    if (Object.values(queue).some(q => q.userId === currentUser)) {
-                        showNotification('Ya estás en la cola', 'warning');
-                        return;
-                    }
-                    const joinedAt = Date.now();
-                    const newRef = queueRef.push();
-                    newRef.set({
-                        userId: currentUser,
-                        joinedAt: joinedAt
-                    }).then(() => {
-                        showNotification('Te uniste a la cola', 'success');
-                        activeUserRef.once('value').then(snap => {
-                            if (!snap.exists()) activateNextInQueue();
-                        });
-                    }).catch(error => {
-                        console.error('Error al unirse a la cola:', error);
-                        showNotification('Error al unirse a la cola', 'error');
+
+                // Verificar si el usuario ya está en la cola
+                const queueSnapshot = await queueRef.once('value');
+                const queue = queueSnapshot.val() || {};
+                if (Object.values(queue).some(q => q.userId === currentUser)) {
+                    showNotification('Ya estás en la cola', 'warning');
+                    return;
+                }
+
+                // Unirse a la cola
+                const joinedAt = Date.now();
+                const newRef = queueRef.push();
+                await newRef.set({
+                    userId: currentUser,
+                    joinedAt: joinedAt
+                });
+                showNotification('Te uniste a la cola', 'success');
+
+                // Si no hay usuario activo, activar el siguiente
+                if (!activeUserSnapshot.exists()) {
+                    await activateNextInQueue();
+                }
+            } catch (error) {
+                console.error('Error al unirse a la cola:', error);
+                showNotification('Error al unirse a la cola', 'error');
+            }
+        }
+
+        function activateNextInQueue() {
+            queueRef.orderByChild('joinedAt').limitToFirst(1).once('value', snap => {
+                const first = Object.entries(snap.val() || {})[0];
+                if (!first) {
+                    activeUserRef.remove().catch(error => {
+                        console.error('Error al eliminar usuario activo:', error);
+                    });
+                    return;
+                }
+                const [key, data] = first;
+                activeUserRef.set({
+                    userId: data.userId,
+                    startTime: Date.now(),
+                    remainingTime: TURN_TIME,
+                    isPaused: false
+                }).then(() => {
+                    queueRef.child(key).remove().catch(error => {
+                        console.error('Error al eliminar de la cola:', error);
                     });
                 }).catch(error => {
-                    console.error('Error al verificar la cola:', error);
-                    showNotification('Error al verificar la cola', 'error');
+                    console.error('Error al activar siguiente usuario:', error);
                 });
+            }).catch(error => {
+                console.error('Error al obtener siguiente en cola:', error);
+            });
+        }
+
+        function setupQueueListeners() {
+            activeUserRef.on('value', snap => {
+                const data = snap.val();
+                renderActiveUser(data);
+                if (data && data.userId === currentUser) {
+                    setupTimer(data);
+                } else {
+                    stopTimer();
+                }
+            }, error => {
+                console.error('Error en listener de activeUser:', error);
+            });
+
+            queueRef.on('value', snap => {
+                renderQueue(snap.val());
+            }, error => {
+                console.error('Error en listener de queue:', error);
+            });
+        }
+
+        function renderActiveUser(data) {
+            const activeUserInfo = document.getElementById('activeUserInfo');
+            const timerControls = document.getElementById('timerControls');
+            if (!activeUserInfo || !timerControls) {
+                console.error('Elementos de UI de usuario activo no encontrados');
+                return;
             }
-            function activateNextInQueue() {
-                queueRef.orderByChild('joinedAt').limitToFirst(1).once('value', snap => {
-                    const first = Object.entries(snap.val() || {})[0];
-                    if (!first) {
-                        activeUserRef.remove().catch(error => {
-                            console.error('Error al eliminar usuario activo:', error);
+
+            if (!data) {
+                activeUserInfo.innerHTML = 'Nadie activo';
+                timerControls.innerHTML = '';
+                stopTimer();
+                return;
+            }
+
+            activeUserInfo.innerHTML = `<b>${data.userId}</b>`;
+            if (data.userId === currentUser) {
+                timerControls.innerHTML = `
+                    <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button>
+                    <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>
+                `;
+                const pauseBtn = document.getElementById('pauseTimerBtn');
+                const resumeBtn = document.getElementById('resumeTimerBtn');
+                if (pauseBtn) pauseBtn.onclick = pauseTimer;
+                if (resumeBtn) resumeBtn.onclick = resumeTimer;
+            } else {
+                timerControls.innerHTML = '';
+            }
+        }
+
+        function renderQueue(queue) {
+            const queueList = document.getElementById('queueList').querySelector('tbody');
+            if (!queueList) {
+                console.error('Elemento queueList tbody no encontrado');
+                return;
+            }
+
+            queueList.innerHTML = '';
+            if (!queue) return;
+
+            Object.values(queue).sort((a, b) => a.joinedAt - b.joinedAt)
+                .forEach((q, i) => {
+                    const tr = document.createElement('tr');
+                    if (q.userId === currentUser) tr.classList.add('current-user');
+                    tr.innerHTML = `
+                        <td>${i + 1}</td>
+                        <td>${q.userId}</td>
+                        <td>${new Date(q.joinedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                        <td>${q.userId === currentUser ? 'En espera (Tú)' : 'En espera'}</td>
+                    `;
+                    queueList.appendChild(tr);
+                });
+        }
+
+        function setupTimer(data) {
+            stopTimer();
+            let remaining = data.remainingTime;
+            let lastTick = Date.now();
+            const timerText = document.getElementById('timerText');
+            const timerProgress = document.getElementById('timerProgress');
+            if (!timerText || !timerProgress) return;
+
+            const totalDash = 408.4; // Circunferencia del círculo (2 * π * 65)
+            timerText.innerHTML = formatTime(remaining);
+            timerProgress.style.strokeDashoffset = totalDash * (1 - remaining / TURN_TIME);
+
+            if (data.isPaused) return;
+
+            timerInterval = setInterval(() => {
+                let now = Date.now();
+                let diff = Math.floor((now - lastTick) / 1000);
+                if (diff > 0) {
+                    remaining -= diff;
+                    lastTick = now;
+                    if (remaining <= 0) {
+                        clearInterval(timerInterval);
+                        timerText.innerHTML = '00:00';
+                        timerProgress.style.strokeDashoffset = totalDash;
+                        activeUserRef.once('value').then(snap => {
+                            if (snap.exists() && snap.val().userId === currentUser) {
+                                activeUserRef.remove().then(activateNextInQueue).catch(error => {
+                                    console.error('Error al finalizar turno:', error);
+                                });
+                            }
                         });
-                        return;
+                    } else {
+                        activeUserRef.once('value').then(snap => {
+                            if (snap.exists() && snap.val().userId === currentUser) {
+                                activeUserRef.update({ remainingTime: remaining }).catch(error => {
+                                    console.error('Error al actualizar tiempo restante:', error);
+                                });
+                            }
+                        });
+                        timerText.innerHTML = formatTime(remaining);
+                        timerProgress.style.strokeDashoffset = totalDash * (1 - remaining / TURN_TIME);
                     }
-                    const [key, data] = first;
-                    activeUserRef.set({
-                        userId: data.userId,
-                        startTime: Date.now(),
-                        remainingTime: TURN_TIME,
-                        isPaused: false
-                    }).then(() => {
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            const timerText = document.getElementById('timerText');
+            const timerProgress = document.getElementById('timerProgress');
+            if (timerText && timerProgress) {
+                timerText.innerHTML = '15:00';
+                timerProgress.style.strokeDashoffset = 408.4;
+            }
+        }
+
+        function pauseTimer() {
+            activeUserRef.once('value').then(snap => {
+                if (snap.exists() && snap.val().userId === currentUser) {
+                    activeUserRef.update({ isPaused: true }).catch(error => {
+                        console.error('Error al pausar temporizador:', error);
+                    });
+                }
+            });
+        }
+
+        function resumeTimer() {
+            activeUserRef.once('value').then(snap => {
+                if (snap.exists() && snap.val().userId === currentUser) {
+                    activeUserRef.update({ isPaused: false }).catch(error => {
+                        console.error('Error al reanudar temporizador:', error);
+                    });
+                }
+            });
+        }
+
+        function formatTime(sec) {
+            let m = Math.floor(sec / 60).toString().padStart(2, '0');
+            let s = (sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        async function cleanupQueueOnLogout() {
+            if (!currentUser) return;
+            try {
+                // Quitar de la cola si está presente
+                const queueSnapshot = await queueRef.once('value');
+                const queue = queueSnapshot.val() || {};
+                Object.entries(queue).forEach(([key, val]) => {
+                    if (val.userId === currentUser) {
                         queueRef.child(key).remove().catch(error => {
                             console.error('Error al eliminar de la cola:', error);
                         });
-                    }).catch(error => {
-                        console.error('Error al activar siguiente usuario:', error);
-                    });
-                }).catch(error => {
-                    console.error('Error al obtener siguiente en cola:', error);
-                });
-            }
-            function setupQueueListeners() {
-                activeUserRef.on('value', snap => {
-                    const data = snap.val();
-                    renderActiveUser(data);
-                    if (data && data.userId === currentUser) {
-                        setupTimer(data);
-                    } else {
-                        stopTimer();
-                    }
-                }, error => {
-                    console.error('Error en listener de activeUser:', error);
-                });
-                queueRef.on('value', snap => {
-                    renderQueue(snap.val());
-                }, error => {
-                    console.error('Error en listener de queue:', error);
-                });
-            }
-            function renderActiveUser(data) {
-                const activeUserInfo = document.getElementById('activeUserInfo');
-                const timer = document.getElementById('timer');
-                const timerControls = document.getElementById('timerControls');
-                if (!activeUserInfo || !timer || !timerControls) {
-                    console.error('Elementos de UI de usuario activo no encontrados');
-                    return;
-                }
-                if (!data) {
-                    activeUserInfo.innerHTML = 'Nadie activo';
-                    timer.innerHTML = '';
-                    timerControls.innerHTML = '';
-                    return;
-                }
-                activeUserInfo.innerHTML = `<b>${data.userId}</b>`;
-                if (data.userId === currentUser) {
-                    timerControls.innerHTML = `
-                        <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}>⏸️ Pausar</button>
-                        <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}>▶️ Reanudar</button>
-                    `;
-                    const pauseBtn = document.getElementById('pauseTimerBtn');
-                    const resumeBtn = document.getElementById('resumeTimerBtn');
-                    if (pauseBtn) pauseBtn.onclick = pauseTimer;
-                    if (resumeBtn) resumeBtn.onclick = resumeTimer;
-                } else {
-                    timerControls.innerHTML = '';
-                }
-            }
-            function renderQueue(queue) {
-                const queueList = document.getElementById('queueList');
-                if (!queueList) {
-                    console.error('Elemento queueList no encontrado');
-                    return;
-                }
-                queueList.innerHTML = '';
-                if (!queue) return;
-                Object.values(queue).sort((a, b) => a.joinedAt - b.joinedAt)
-                    .forEach((q, i) => {
-                        const li = document.createElement('li');
-                        li.textContent = `${i + 1}. ${q.userId} ${q.userId === currentUser ? '(Tú)' : ''}`;
-                        queueList.appendChild(li);
-                    });
-            }
-            function setupTimer(data) {
-                stopTimer();
-                let remaining = data.remainingTime;
-                let lastTick = Date.now();
-                const timer = document.getElementById('timer');
-                if (!timer) return;
-                timer.innerHTML = formatTime(remaining);
-                if (data.isPaused) return;
-                timerInterval = setInterval(() => {
-                    let now = Date.now();
-                    let diff = Math.floor((now - lastTick) / 1000);
-                    if (diff > 0) {
-                        remaining -= diff;
-                        lastTick = now;
-                        if (remaining <= 0) {
-                            clearInterval(timerInterval);
-                            timer.innerHTML = 'Tiempo finalizado';
-                            activeUserRef.once('value').then(snap => {
-                                if (snap.exists() && snap.val().userId === currentUser) {
-                                    activeUserRef.remove().then(activateNextInQueue).catch(error => {
-                                        console.error('Error al finalizar turno:', error);
-                                    });
-                                }
-                            });
-                        } else {
-                            activeUserRef.once('value').then(snap => {
-                                if (snap.exists() && snap.val().userId === currentUser) {
-                                    activeUserRef.update({ remainingTime: remaining }).catch(error => {
-                                        console.error('Error al actualizar tiempo restante:', error);
-                                    });
-                                }
-                            });
-                            timer.innerHTML = formatTime(remaining);
-                        }
-                    }
-                }, 1000);
-            }
-            function stopTimer() {
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                    timerInterval = null;
-                }
-            }
-            function pauseTimer() {
-                activeUserRef.once('value').then(snap => {
-                    if (snap.exists() && snap.val().userId === currentUser) {
-                        activeUserRef.update({ isPaused: true }).catch(error => {
-                            console.error('Error al pausar temporizador:', error);
-                        });
                     }
                 });
+                // Si es el usuario activo, liberar y activar siguiente
+                const activeUserSnapshot = await activeUserRef.once('value');
+                if (activeUserSnapshot.exists() && activeUserSnapshot.val().userId === currentUser) {
+                    await activeUserRef.remove();
+                    await activateNextInQueue();
+                }
+            } catch (error) {
+                console.error('Error limpiando cola al cerrar sesión:', error);
             }
-            function resumeTimer() {
-                activeUserRef.once('value').then(snap => {
-                    if (snap.exists() && snap.val().userId === currentUser) {
-                        activeUserRef.update({ isPaused: false }).catch(error => {
-                            console.error('Error al reanudar temporizador:', error);
-                        });
+        }
+
+        // ---- SISTEMA DE SESIÓN ÚNICA ----
+        async function cleanupResidualSessions() {
+            try {
+                const lastUser = localStorage.getItem('lastUser');
+                const lastSessionId = localStorage.getItem('lastSessionId');
+                if (lastUser && lastSessionId) {
+                    const sessionRef = activeSessionsRef.child(lastUser);
+                    const snapshot = await sessionRef.once('value');
+                    if (snapshot.exists() && snapshot.val().sessionId === lastSessionId) {
+                        await sessionRef.remove();
+                        console.log(`Sesión residual eliminada para ${lastUser}`);
                     }
-                });
+                    localStorage.removeItem('lastUser');
+                    localStorage.removeItem('lastSessionId');
+                }
+            } catch (error) {
+                console.error('Error en limpieza de sesiones:', error);
             }
-            function formatTime(sec) {
-                let m = Math.floor(sec / 60).toString().padStart(2, '0');
-                let s = (sec % 60).toString().padStart(2, '0');
-                return `${m}:${s}`;
+        }
+
+        function setupConnectionListener() {
+            connectedRef.on('value', snap => {
+                isConnected = snap.val();
+                updateConnectionStatus();
+                if (isConnected && currentUser && sessionId) {
+                    console.log(`Conexión establecida, reiniciando heartbeat para ${currentUser}`);
+                    startHeartbeat();
+                    checkSessionValidity();
+                } else if (!isConnected && currentUser) {
+                    console.log(`Conexión perdida para ${currentUser}`);
+                    showNotification('Conexión perdida. Intentando reconectar...', 'warning');
+                }
+            });
+        }
+
+        function setupLoginUI() {
+            const userSelect = document.getElementById('userSelect');
+            if (!userSelect) {
+                console.error('Elemento userSelect no encontrado');
+                showErrorScreen('Error: Elementos de interfaz no encontrados.');
+                return;
             }
-            async function cleanupQueueOnLogout() {
-                if (!currentUser) return;
+            userSelect.innerHTML = '<option value="" disabled selected>Selecciona tu usuario</option>';
+            PREDEFINED_USERS.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user;
+                option.textContent = user;
+                userSelect.appendChild(option);
+            });
+            document.getElementById('loginModal').style.display = 'flex';
+            const loginButton = document.getElementById('loginButton');
+            if (loginButton) {
+                loginButton.onclick = handleLoginClick;
+            } else {
+                console.error('Botón loginButton no encontrado');
+            }
+        }
+
+        async function handleLoginClick() {
+            if (isLoggingIn) return;
+            const userSelect = document.getElementById('userSelect');
+            const userError = document.getElementById('userError');
+            const userWarning = document.getElementById('userWarning');
+            const loginButton = document.getElementById('loginButton');
+            const loginButtonText = document.getElementById('loginButtonText');
+            if (!userSelect || !userError || !userWarning || !loginButton || !loginButtonText) {
+                console.error('Elementos de UI de login no encontrados');
+                showErrorScreen('Error: Elementos de interfaz no encontrados.');
+                return;
+            }
+            userError.style.display = 'none';
+            userWarning.style.display = 'none';
+            const selectedUser = userSelect.value;
+            if (!selectedUser || !PREDEFINED_USERS.includes(selectedUser)) {
+                showError('Selecciona un usuario válido');
+                return;
+            }
+            if (!isConnected) {
+                showError('Sin conexión al servidor. Verifica tu conexión a internet.');
+                return;
+            }
+            isLoggingIn = true;
+            loginButton.disabled = true;
+            loginButtonText.innerHTML = '<span class="loading-spinner"></span>Verificando sesión...';
+            try {
+                await handleUniqueLogin(selectedUser);
+            } catch (error) {
+                showError(error.message);
+                console.error('Error en login:', error);
+            } finally {
+                isLoggingIn = false;
+                loginButton.disabled = false;
+                loginButtonText.textContent = '🚀 Iniciar Sesión';
+            }
+        }
+
+        async function handleUniqueLogin(selectedUser) {
+            console.log(`Intentando login para ${selectedUser}`);
+            const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${selectedUser.replace(/\s+/g, '')}`;
+            const now = Date.now();
+            const result = await activeSessionsRef.child(selectedUser).transaction(currentSession => {
+                if (currentSession) {
+                    console.log(`Sesión activa encontrada para ${selectedUser}`);
+                    return undefined;
+                }
+                console.log(`Creando nueva sesión para ${selectedUser}, sessionId: ${newSessionId}`);
+                return {
+                    userId: selectedUser,
+                    sessionId: newSessionId,
+                    loginTime: now,
+                    lastHeartbeat: now,
+                    userAgent: navigator.userAgent,
+                    ipAddress: 'unknown',
+                    isActive: true
+                };
+            });
+            if (!result.committed) {
+                throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Cierra la sesión existente antes de iniciar una nueva.`);
+            }
+            currentUser = selectedUser;
+            sessionId = newSessionId;
+            sessionStartTime = now;
+            localStorage.setItem('lastUser', currentUser);
+            localStorage.setItem('lastSessionId', sessionId);
+            document.getElementById('userName').textContent = currentUser;
+            document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-ES');
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            startHeartbeat();
+            startSessionMonitoring();
+            showNotification(`¡Bienvenido ${currentUser}! Sesión única iniciada.`, 'success');
+        }
+
+        function startHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+            sendHeartbeat();
+            heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+        }
+
+        async function sendHeartbeat() {
+            if (!currentUser || !sessionId || !isConnected) {
+                console.log('Heartbeat no enviado: usuario o sesión no definida, o sin conexión');
+                return;
+            }
+            let retryCount = 0;
+            while (retryCount < MAX_HEARTBEAT_RETRIES) {
                 try {
-                    // Quitar de la cola si está presente
-                    const queueSnapshot = await queueRef.once('value');
-                    const queue = queueSnapshot.val() || {};
-                    Object.entries(queue).forEach(([key, val]) => {
-                        if (val.userId === currentUser) {
-                            queueRef.child(key).remove().catch(error => {
-                                console.error('Error al eliminar de la cola:', error);
-                            });
-                        }
-                    });
-                    // Si es el usuario activo, liberar y activar siguiente
-                    const activeUserSnapshot = await activeUserRef.once('value');
-                    if (activeUserSnapshot.exists() && activeUserSnapshot.val().userId === currentUser) {
-                        await activeUserRef.remove();
-                        await activateNextInQueue();
-                    }
-                } catch (error) {
-                    console.error('Error limpiando cola al cerrar sesión:', error);
-                }
-            }
-            // ---- SISTEMA DE SESIÓN ÚNICA ----
-            async function cleanupResidualSessions() {
-                try {
-                    const lastUser = localStorage.getItem('lastUser');
-                    const lastSessionId = localStorage.getItem('lastSessionId');
-                    if (lastUser && lastSessionId) {
-                        const sessionRef = activeSessionsRef.child(lastUser);
-                        const snapshot = await sessionRef.once('value');
-                        if (snapshot.exists() && snapshot.val().sessionId === lastSessionId) {
-                            await sessionRef.remove();
-                            console.log(`Sesión residual eliminada para ${lastUser}`);
-                        }
-                        localStorage.removeItem('lastUser');
-                        localStorage.removeItem('lastSessionId');
-                    }
-                } catch (error) {
-                    console.error('Error en limpieza de sesiones:', error);
-                }
-            }
-            function setupConnectionListener() {
-                connectedRef.on('value', snap => {
-                    isConnected = snap.val();
-                    updateConnectionStatus();
-                    if (isConnected && currentUser && sessionId) {
-                        console.log(`Conexión establecida, reiniciando heartbeat para ${currentUser}`);
-                        startHeartbeat();
-                        checkSessionValidity();
-                    } else if (!isConnected && currentUser) {
-                        console.log(`Conexión perdida para ${currentUser}`);
-                        showNotification('Conexión perdida. Intentando reconectar...', 'warning');
-                    }
-                });
-            }
-            function setupLoginUI() {
-                const userSelect = document.getElementById('userSelect');
-                const loginModal = document.getElementById('loginModal');
-                if (!userSelect || !loginModal) {
-                    console.error('Elementos de UI de login no encontrados');
-                    showErrorScreen('Error: Elementos de interfaz no encontrados.');
-                    return;
-                }
-                userSelect.innerHTML = '<option value="" disabled selected>Selecciona tu usuario</option>';
-                PREDEFINED_USERS.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user;
-                    option.textContent = user;
-                    userSelect.appendChild(option);
-                });
-                loginModal.style.display = 'flex';
-                const loginBtn = document.getElementById('loginBtn');
-                if (loginBtn) {
-                    loginBtn.onclick = handleLoginClick;
-                } else {
-                    console.error('Botón loginBtn no encontrado');
-                }
-            }
-            async function handleLoginClick() {
-                if (isLoggingIn) return;
-                const userSelect = document.getElementById('userSelect');
-                const userError = document.getElementById('userError');
-                const userWarning = document.getElementById('userWarning');
-                const loginBtn = document.getElementById('loginBtn');
-                const loginButtonText = document.getElementById('loginButtonText');
-                if (!userSelect || !userError || !userWarning || !loginBtn || !loginButtonText) {
-                    console.error('Elementos de UI de login no encontrados');
-                    showErrorScreen('Error: Elementos de interfaz no encontrados.');
-                    return;
-                }
-                userError.style.display = 'none';
-                userWarning.style.display = 'none';
-                const selectedUser = userSelect.value;
-                if (!selectedUser || !PREDEFINED_USERS.includes(selectedUser)) {
-                    showError('Selecciona un usuario válido');
-                    return;
-                }
-                if (!isConnected) {
-                    showError('Sin conexión al servidor. Verifica tu conexión a internet.');
-                    return;
-                }
-                isLoggingIn = true;
-                loginBtn.disabled = true;
-                loginButtonText.innerHTML = '<span class="loading-spinner"></span>Verificando sesión...';
-                try {
-                    await handleUniqueLogin(selectedUser);
-                } catch (error) {
-                    showError(error.message);
-                    console.error('Error en login:', error);
-                } finally {
-                    isLoggingIn = false;
-                    loginBtn.disabled = false;
-                    loginButtonText.textContent = '🚖 Iniciar Sesión';
-                }
-            }
-            async function handleUniqueLogin(selectedUser) {
-                console.log(`Intentando login para ${selectedUser}`);
-                const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${selectedUser.replace(/\s+/g, '')}`;
-                const now = Date.now();
-                const result = await activeSessionsRef.child(selectedUser).transaction(currentSession => {
-                    if (currentSession) {
-                        console.log(`Sesión activa encontrada para ${selectedUser}`);
-                        return undefined;
-                    }
-                    console.log(`Creando nueva sesión para ${selectedUser}, sessionId: ${newSessionId}`);
-                    return {
-                        userId: selectedUser,
-                        sessionId: newSessionId,
-                        loginTime: now,
-                        lastHeartbeat: now,
-                        userAgent: navigator.userAgent,
-                        ipAddress: 'unknown',
+                    console.log(`Enviando heartbeat para ${currentUser}, sessionId: ${sessionId}, intento ${retryCount + 1}`);
+                    const heartbeatData = {
+                        lastHeartbeat: Date.now(),
                         isActive: true
                     };
-                });
-                if (!result.committed) {
-                    throw new Error(`El usuario "${selectedUser}" ya tiene una sesión activa. Cierra la sesión existente antes de iniciar una nueva.`);
-                }
-                currentUser = selectedUser;
-                sessionId = newSessionId;
-                sessionStartTime = now;
-                localStorage.setItem('lastUser', currentUser);
-                localStorage.setItem('lastSessionId', sessionId);
-                const userName = document.getElementById('userName');
-                const sessionStartTimeEl = document.getElementById('sessionStartTime');
-                const loginModal = document.getElementById('loginModal');
-                const mainContainer = document.getElementById('mainContainer');
-                if (!userName || !sessionStartTimeEl || !loginModal || !mainContainer) {
-                    console.error('Elementos de UI no encontrados');
-                    showErrorScreen('Error: Elementos de interfaz no encontrados.');
-                    return;
-                }
-                userName.textContent = currentUser;
-                sessionStartTimeEl.textContent = new Date(sessionStartTime).toLocaleString('es-ES');
-                loginModal.style.display = 'none';
-                mainContainer.style.display = 'block';
-                startHeartbeat();
-                startSessionMonitoring();
-                showNotification(`¡Bienvenido ${currentUser}! Sesión única iniciada.`, 'success');
-            }
-            function startHeartbeat() {
-                if (heartbeatInterval) {
-                    clearInterval(heartbeatInterval);
-                }
-                sendHeartbeat();
-                heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
-            }
-            async function sendHeartbeat() {
-                if (!currentUser || !sessionId || !isConnected) {
-                    console.log('Heartbeat no enviado: usuario o sesión no definida, o sin conexión');
-                    return;
-                }
-                let retryCount = 0;
-                while (retryCount < MAX_HEARTBEAT_RETRIES) {
-                    try {
-                        console.log(`Enviando heartbeat para ${currentUser}, sessionId: ${sessionId}, intento ${retryCount + 1}`);
-                        const heartbeatData = {
-                            lastHeartbeat: Date.now(),
-                            isActive: true
-                        };
-                        const result = await activeSessionsRef.child(currentUser).transaction(currentSession => {
-                            if (!currentSession || currentSession.sessionId !== sessionId) {
-                                console.log(`Sesión no válida detectada en heartbeat para ${currentUser}, esperado: ${sessionId}, encontrado: ${currentSession ? currentSession.sessionId : 'ninguna'}`);
-                                return undefined;
-                            }
-                            return { ...currentSession, ...heartbeatData };
-                        });
-                        if (!result.committed) {
-                            console.log(`Transacción de heartbeat no confirmada para ${currentUser}`);
-                            if (retryCount === MAX_HEARTBEAT_RETRIES - 1) {
-                                await forceLogout('Sesión invalidada tras múltiples intentos de heartbeat');
-                            }
-                            retryCount++;
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                            continue;
+                    const result = await activeSessionsRef.child(currentUser).transaction(currentSession => {
+                        if (!currentSession || currentSession.sessionId !== sessionId) {
+                            console.log(`Sesión no válida detectada en heartbeat para ${currentUser}, esperado: ${sessionId}, encontrado: ${currentSession ? currentSession.sessionId : 'ninguna'}`);
+                            return undefined;
                         }
-                        console.log(`Heartbeat exitoso para ${currentUser}`);
-                        return;
-                    } catch (error) {
-                        console.error(`Error enviando heartbeat (intento ${retryCount + 1}):`, error);
-                        if (error.code === 'PERMISSION_DENIED') {
-                            await forceLogout('Permisos insuficientes en heartbeat');
-                            return;
+                        return { ...currentSession, ...heartbeatData };
+                    });
+                    if (!result.committed) {
+                        console.log(`Transacción de heartbeat no confirmada para ${currentUser}`);
+                        if (retryCount === MAX_HEARTBEAT_RETRIES - 1) {
+                            await forceLogout('Sesión invalidada tras múltiples intentos de heartbeat');
                         }
                         retryCount++;
-                        if (retryCount === MAX_HEARTBEAT_RETRIES) {
-                            console.log(`Máximo de reintentos alcanzado para heartbeat de ${currentUser}`);
-                            await forceLogout('Error persistente en heartbeat tras múltiples intentos');
-                            return;
-                        }
                         await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
                     }
-                }
-            }
-            function startSessionMonitoring() {
-                if (currentUser) {
-                    console.log(`Iniciando monitoreo de sesión para ${currentUser}`);
-                    activeSessionsRef.child(currentUser).on('value', snapshot => {
-                        try {
-                            if (!snapshot.exists()) {
-                                console.log(`Sesión no encontrada en monitoreo para ${currentUser}`);
-                                forceLogout('Sesión eliminada externamente');
-                                return;
-                            }
-                            const sessionData = snapshot.val();
-                            if (sessionData.sessionId !== sessionId) {
-                                console.log(`ID de sesión no coincide en monitoreo para ${currentUser}, esperado: ${sessionId}, encontrado: ${sessionData.sessionId}`);
-                                forceLogout('Nueva sesión detectada desde otro dispositivo');
-                            }
-                        } catch (error) {
-                            console.error('Error en listener de monitoreo:', error);
-                        }
-                    }, error => {
-                        console.error('Error configurando listener de sesión:', error);
-                    });
-                }
-                if (sessionCheckInterval) {
-                    clearInterval(sessionCheckInterval);
-                }
-                sessionCheckInterval = setInterval(checkSessionValidity, SESSION_CHECK_INTERVAL);
-            }
-            async function checkSessionValidity() {
-                if (!currentUser || !sessionId) {
-                    console.log('Validación de sesión omitida: usuario o sesión no definida');
+                    console.log(`Heartbeat exitoso para ${currentUser}`);
                     return;
-                }
-                try {
-                    console.log(`Verificando validez de sesión para ${currentUser}, sessionId: ${sessionId}`);
-                    const snapshot = await activeSessionsRef.child(currentUser).once('value');
-                    if (!snapshot.exists()) {
-                        console.log(`Sesión no encontrada en validación para ${currentUser}`);
-                        await forceLogout('Sesión no encontrada en la base de datos');
+                } catch (error) {
+                    console.error(`Error enviando heartbeat (intento ${retryCount + 1}):`, error);
+                    if (error.code === 'PERMISSION_DENIED') {
+                        await forceLogout('Permisos insuficientes en heartbeat');
                         return;
                     }
-                    const sessionData = snapshot.val();
-                    if (sessionData.sessionId !== sessionId) {
-                        console.log(`ID de sesión no coincide en validación para ${currentUser}, esperado: ${sessionId}, encontrado: ${sessionData.sessionId}`);
-                        await forceLogout('ID de sesión no coincide');
+                    retryCount++;
+                    if (retryCount === MAX_HEARTBEAT_RETRIES) {
+                        console.log(`Máximo de reintentos alcanzado para heartbeat de ${currentUser}`);
+                        await forceLogout('Error persistente en heartbeat tras múltiples intentos');
+                        return;
                     }
-                } catch (error) {
-                    console.error('Error verificando sesión:', error);
-                    if (error.code !== 'PERMISSION_DENIED') {
-                        showNotification('Error verificando sesión. Intenta de nuevo.', 'warning');
-                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            async function logout() {
-                try {
-                    if (currentUser && sessionId) {
-                        console.log(`Cerrando sesión para ${currentUser}, sessionId: ${sessionId}`);
-                        await activeSessionsRef.child(currentUser).remove();
-                        console.log(`Sesión eliminada para ${currentUser}`);
+        }
+
+        function startSessionMonitoring() {
+            if (currentUser) {
+                console.log(`Iniciando monitoreo de sesión para ${currentUser}`);
+                activeSessionsRef.child(currentUser).on('value', snapshot => {
+                    try {
+                        if (!snapshot.exists()) {
+                            console.log(`Sesión no encontrada en monitoreo para ${currentUser}`);
+                            forceLogout('Sesión eliminada externamente');
+                            return;
+                        }
+                        const sessionData = snapshot.val();
+                        if (sessionData.sessionId !== sessionId) {
+                            console.log(`ID de sesión no coincide en monitoreo para ${currentUser}, esperado: ${sessionId}, encontrado: ${sessionData.sessionId}`);
+                            forceLogout('Nueva sesión detectada desde otro dispositivo');
+                        }
+                    } catch (error) {
+                        console.error('Error en listener de monitoreo:', error);
                     }
-                    await cleanupQueueOnLogout();
-                    await cleanupSession();
-                    showNotification('Sesión cerrada correctamente', 'success');
-                } catch (error) {
-                    console.error('Error al cerrar sesión:', error);
-                    showNotification('Error al cerrar sesión', 'error');
-                    await cleanupSession();
+                }, error => {
+                    console.error('Error configurando listener de sesión:', error);
+                });
+            }
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+            }
+            sessionCheckInterval = setInterval(checkSessionValidity, SESSION_CHECK_INTERVAL);
+        }
+
+        async function checkSessionValidity() {
+            if (!currentUser || !sessionId) {
+                console.log('Validación de sesión omitida: usuario o sesión no definida');
+                return;
+            }
+            try {
+                console.log(`Verificando validez de sesión para ${currentUser}, sessionId: ${sessionId}`);
+                const snapshot = await activeSessionsRef.child(currentUser).once('value');
+                if (!snapshot.exists()) {
+                    console.log(`Sesión no encontrada en validación para ${currentUser}`);
+                    await forceLogout('Sesión no encontrada en la base de datos');
+                    return;
+                }
+                const sessionData = snapshot.val();
+                if (sessionData.sessionId !== sessionId) {
+                    console.log(`ID de sesión no coincide en validación para ${currentUser}, esperado: ${sessionId}, encontrado: ${sessionData.sessionId}`);
+                    await forceLogout('ID de sesión no coincide');
+                }
+            } catch (error) {
+                console.error('Error verificando sesión:', error);
+                if (error.code !== 'PERMISSION_DENIED') {
+                    showNotification('Error verificando sesión. Intenta de nuevo.', 'warning');
                 }
             }
-            async function forceLogout(reason = 'Motivo desconocido') {
-                console.warn(`Logout forzado para ${currentUser || 'usuario no definido'}: ${reason}`);
-                showNotification(`Sesión terminada: ${reason}`, 'warning');
+        }
+
+        async function logout() {
+            try {
+                if (currentUser && sessionId) {
+                    console.log(`Cerrando sesión para ${currentUser}, sessionId: ${sessionId}`);
+                    await activeSessionsRef.child(currentUser).remove();
+                    console.log(`Sesión eliminada para ${currentUser}`);
+                }
                 await cleanupQueueOnLogout();
                 await cleanupSession();
+                showNotification('Sesión cerrada correctamente', 'success');
+            } catch (error) {
+                console.error('Error al cerrar sesión:', error);
+                showNotification('Error al cerrar sesión', 'error');
+                await cleanupSession();
             }
-            async function cleanupSession() {
-                console.log('Limpiando sesión local');
+        }
+
+        async function forceLogout(reason = 'Motivo desconocido') {
+            console.warn(`Logout forzado para ${currentUser || 'usuario no definido'}: ${reason}`);
+            showNotification(`Sesión terminada: ${reason}`, 'warning');
+            await cleanupQueueOnLogout();
+            await cleanupSession();
+        }
+
+        async function cleanupSession() {
+            console.log('Limpiando sesión local');
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+                sessionCheckInterval = null;
+            }
+            if (currentUser) {
+                activeSessionsRef.child(currentUser).off();
+            }
+            currentUser = null;
+            sessionId = null;
+            sessionStartTime = null;
+            localStorage.removeItem('lastUser');
+            localStorage.removeItem('lastSessionId');
+            document.getElementById('mainContainer').style.display = 'none';
+            setupLoginUI();
+        }
+
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connectionStatus');
+            if (statusElement) {
+                statusElement.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+                statusElement.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
+            }
+        }
+
+        function updateCurrentTime() {
+            const now = new Date();
+            const currentTime = document.getElementById('currentTime');
+            if (currentTime) {
+                currentTime.textContent = now.toLocaleString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        }
+
+        function showError(message) {
+            const errorElement = document.getElementById('userError');
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            if (notification) {
+                notification.textContent = message;
+                notification.className = `notification ${type}`;
+                notification.classList.add('show');
+                setTimeout(() => notification.classList.remove('show'), 4000);
+            }
+        }
+
+        function showErrorScreen(message) {
+            document.body.innerHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f8f9fa;">
+                    <div style="background: white; padding: 40px; border-radius: 15px; text-align: center; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+                        <h2 style="color: #dc3545; margin-bottom: 20px;">❌ Error del Sistema</h2>
+                        <p style="color: #666; margin-bottom: 30px;">${message}</p>
+                        <button onclick="window.location.reload()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 1.1em;">
+                            🔄 Reintentar
+                        </button>
+                    </div>
+                </div>`;
+        }
+
+        window.addEventListener('beforeunload', async (event) => {
+            if (currentUser && sessionId) {
+                try {
+                    console.log(`Ejecutando cleanup en beforeunload para ${currentUser}`);
+                    const snapshot = await activeSessionsRef.child(currentUser).once('value');
+                    if (snapshot.exists() && snapshot.val().sessionId === sessionId) {
+                        await activeSessionsRef.child(currentUser).remove();
+                        console.log(`Sesión eliminada en beforeunload para ${currentUser}`);
+                    }
+                    await cleanupQueueOnLogout();
+                    localStorage.removeItem('lastUser');
+                    localStorage.removeItem('lastSessionId');
+                } catch (error) {
+                    console.error('Error en cleanup de beforeunload:', error);
+                }
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Página oculta, reduciendo frecuencia de heartbeat');
                 if (heartbeatInterval) {
                     clearInterval(heartbeatInterval);
-                    heartbeatInterval = null;
+                    heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL * 2);
                 }
-                if (sessionCheckInterval) {
-                    clearInterval(sessionCheckInterval);
-                    sessionCheckInterval = null;
-                }
-                if (currentUser) {
-                    activeSessionsRef.child(currentUser).off();
-                }
-                currentUser = null;
-                sessionId = null;
-                sessionStartTime = null;
-                localStorage.removeItem('lastUser');
-                localStorage.removeItem('lastSessionId');
-                const mainContainer = document.getElementById('mainContainer');
-                if (mainContainer) {
-                    mainContainer.style.display = 'none';
-                }
-                setupLoginUI();
-            }
-            function updateConnectionStatus() {
-                const statusElement = document.getElementById('connectionStatus');
-                if (statusElement) {
-                    statusElement.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-                    statusElement.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
-                }
-            }
-            function updateCurrentTime() {
-                const now = new Date();
-                const currentTime = document.getElementById('currentTime');
-                if (currentTime) {
-                    currentTime.textContent = now.toLocaleString('es-ES', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    });
-                }
-            }
-            function showError(message) {
-                const errorElement = document.getElementById('userError');
-                if (errorElement) {
-                    errorElement.textContent = message;
-                    errorElement.style.display = 'block';
-                }
-            }
-            function showNotification(message, type = 'success') {
-                const notification = document.getElementById('notification');
-                if (notification) {
-                    notification.textContent = message;
-                    notification.className = `notification ${type}`;
-                    notification.classList.add('show');
-                    setTimeout(() => notification.classList.remove('show'), 4000);
-                }
-            }
-            function showErrorScreen(message) {
-                document.body.innerHTML = `
-                    <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f8f9fa;">
-                        <div style="background: white; padding: 40px; border-radius: 15px; text-align: center; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
-                            <h2 style="color: #dc3545; margin-bottom: 20px;">❌ Error del Sistema</h2>
-                            <p style="color: #666; margin-bottom: 30px;">${message}</p>
-                            <button onclick="window.location.reload()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 1.1em;">
-                                🔄 Reintentar
-                            </button>
-                        </div>
-                    </div>`;
-            }
-            window.addEventListener('beforeunload', async (event) => {
+            } else {
+                console.log('Página visible, restaurando heartbeat normal');
                 if (currentUser && sessionId) {
-                    try {
-                        console.log(`Ejecutando cleanup en beforeunload para ${currentUser}`);
-                        const snapshot = await activeSessionsRef.child(currentUser).once('value');
-                        if (snapshot.exists() && snapshot.val().sessionId === sessionId) {
-                            await activeSessionsRef.child(currentUser).remove();
-                            console.log(`Sesión eliminada en beforeunload para ${currentUser}`);
-                        }
-                        await cleanupQueueOnLogout();
-                        localStorage.removeItem('lastUser');
-                        localStorage.removeItem('lastSessionId');
-                    } catch (error) {
-                        console.error('Error en cleanup de beforeunload:', error);
-                    }
+                    startHeartbeat();
                 }
-            });
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
-                    console.log('Página oculta, reduciendo frecuencia de heartbeat');
-                    if (heartbeatInterval) {
-                        clearInterval(heartbeatInterval);
-                        heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL * 2);
-                    }
-                } else {
-                    console.log('Página visible, restaurando heartbeat normal');
-                    if (currentUser && sessionId) {
-                        startHeartbeat();
-                    }
-                }
-            });
-        </script>
-    </body>
+            }
+        });
+    </script>
+</body>
 </html>
