@@ -98,7 +98,6 @@
         .active-user-panel h3, .queue-table-container h3 { font-size: 1.5em; margin-bottom: 20px; border-bottom: 2px solid var(--color-primary); padding-bottom: 10px; }
         .active-user-panel { text-align: center; }
         
-        /* Estilos del Reloj y Cola */
         .timer-clock { position: relative; width: 150px; height: 150px; margin: 20px auto; }
         .timer-circle { fill: none; stroke: #ddd; stroke-width: 10; }
         .timer-progress { fill: none; stroke: var(--color-primary); stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.5s linear; }
@@ -118,7 +117,6 @@
         .leave-queue-btn { background-color: var(--color-danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: background-color 0.2s ease; }
         .leave-queue-btn:hover { background-color: #c82333; }
 
-        /* Estilos del Login Modal */
         .login-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; padding: 20px;}
         .login-content { background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); width: 100%; max-width: 450px; box-shadow: var(--shadow); text-align: center; }
         .login-content h2 { margin-bottom: 25px; color: var(--color-primary); font-size: 1.8em; }
@@ -128,9 +126,7 @@
         .login-btn:hover { background-color: #003B6D; }
         .login-btn:disabled { background: #6c757d; cursor: not-allowed; }
         .error-message { background: #f8d7da; color: #721c24; padding: 15px; border-radius: var(--border-radius); margin-bottom: 20px; display: none; border: 1px solid #f5c6cb; }
-        .warning-message { background: #fff3cd; color: #856404; padding: 12px; border-radius: var(--border-radius); margin-bottom: 20px; display: none; border: 1px solid #ffeaa7; }
         
-        /* Estilos de Notificaciones y Spinner */
         .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; vertical-align: middle;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .notification { position: fixed; top: 20px; right: 20px; color: white; padding: 15px 25px; border-radius: var(--border-radius); box-shadow: var(--shadow); transform: translateX(400px); opacity: 0; transition: all 0.5s ease; z-index: 1000; }
@@ -147,7 +143,6 @@
             <h2>Bienvenido</h2>
             <p class="login-subtitle">Inicia sesión para acceder al sistema de turnos</p>
             <div class="error-message" id="userError"></div>
-            <div class="warning-message" id="userWarning"></div>
             <input type="email" class="login-input" id="emailInput" placeholder="Correo electrónico" required>
             <input type="password" class="login-input" id="passwordInput" placeholder="Contraseña" required>
             <button class="login-btn" id="loginButton">
@@ -159,7 +154,7 @@
     <div class="container" id="mainContainer" style="display: none;">
         <header class="header">
             <h1>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" fill="var(--color-primary)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
                 Sistema de Turnos
             </h1>
             <p>Gestión de colas de espera con sesión única</p>
@@ -174,7 +169,7 @@
             <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
         </div>
 
-        <div class="queue-panel">
+        <div class="card queue-panel">
             <div class="active-user-panel">
                 <h3>Usuario Activo</h3>
                 <div id="activeUserInfo">Nadie activo</div>
@@ -195,7 +190,7 @@
                             <tr>
                                 <th>#</th>
                                 <th>Usuario</th>
-                                <th>Hora de Ingreso</th>
+                                <th>Ingreso</th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
@@ -277,7 +272,7 @@
             }
         }
 
-        // --- LÓGICA DE SESIÓN (LOGIN/LOGOUT) ---
+        // --- LÓGICA DE SESIÓN ---
         function setupLoginUI() {
             const loginModal = document.getElementById('loginModal');
             loginModal.style.display = 'flex';
@@ -312,7 +307,7 @@
                 sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
                 await sessionRef.set({
                     userId: user.uid, email: user.email, sessionId: sessionId,
-                    loginTime: firebase.database.ServerValue.TIMESTAMP,
+                    loginTime: firebase.database.ServerValue.TIMESTAMP
                 });
                 await sessionRef.onDisconnect().remove();
 
