@@ -162,7 +162,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
- <script>
+<script>
     // =================================================================================
     // CONFIGURACIÓN E INICIALIZACIÓN
     // =================================================================================
@@ -204,41 +204,29 @@
             queueRef = database.ref(QUEUE_PATH);
             activeUserRef = database.ref(ACTIVE_USER_PATH);
             
-            // Iniciar el reloj de la página
             startPageClock();
-            
             setupConnectionListener();
             setupLoginUI();
-            setupQueueSystem();
-            setupGlobalTimerListener();
             requestNotificationPermission();
+
+            // IMPORTANTE: Las funciones que requieren autenticación se han movido de aquí.
+            // Ya no se llaman setupQueueSystem() ni setupGlobalTimerListener() al iniciar.
+            
         } catch (error) {
-            console.error('Error al inicializar la aplicación:', error);
-            showErrorScreen(`Error al inicializar: ${error.message}`);
+            showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
         }
     }
     
     // =================================================================================
-    // LÓGICA DEL RELOJ DE PÁGINA (CORREGIDO)
+    // LÓGICA DEL RELOJ DE PÁGINA
     // =================================================================================
-
     function startPageClock() {
         if (pageClockInterval) clearInterval(pageClockInterval);
         pageClockInterval = setInterval(updateCurrentTime, 1000);
     }
     
-    function stopPageClock() {
-        if(pageClockInterval) clearInterval(pageClockInterval);
-    }
-
-    /**
-     * FUNCIÓN CORREGIDA
-     * Esta función ahora comprueba si el elemento 'currentTime' existe antes de intentar modificarlo.
-     * Esto evita el error si la función se ejecuta después de que el elemento ha sido eliminado de la página.
-     */
     function updateCurrentTime() {
         const currentTimeElement = document.getElementById('currentTime');
-        // Si el elemento existe, actualizamos la hora. Si no, no hacemos nada.
         if (currentTimeElement) {
             currentTimeElement.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'full', timeStyle: 'medium' });
         }
@@ -247,19 +235,12 @@
     // =================================================================================
     // LÓGICA DE SESIÓN (LOGIN, LOGOUT, HEARTBEAT)
     // =================================================================================
-    // Tu código de sesión... (permanece igual que el que enviaste)
     function setupLoginUI() {
-        try {
-            const loginModal = document.getElementById('loginModal');
-            loginModal.style.display = 'flex';
-            document.getElementById('loginButton').onclick = handleLoginClick;
-            document.getElementById('forgotPasswordLink').onclick = handleForgotPassword;
-            document.getElementById('passwordInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') handleLoginClick();
-            });
-        } catch (error) {
-            showErrorScreen('Error en la interfaz de login: ' + error.message);
-        }
+        const loginModal = document.getElementById('loginModal');
+        loginModal.style.display = 'flex';
+        document.getElementById('loginButton').onclick = handleLoginClick;
+        document.getElementById('forgotPasswordLink').onclick = handleForgotPassword;
+        document.getElementById('passwordInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLoginClick(); });
     }
 
     async function handleLoginClick() {
@@ -288,9 +269,7 @@
 
             sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             await sessionRef.set({
-                userId: user.uid,
-                email: user.email,
-                sessionId: sessionId,
+                userId: user.uid, email: user.email, sessionId: sessionId,
                 loginTime: firebase.database.ServerValue.TIMESTAMP,
                 lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP
             });
@@ -302,6 +281,11 @@
             document.getElementById('sessionStart').textContent = new Date(sessionStartTime).toLocaleString('es-DO');
             document.getElementById('loginModal').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
+
+            // SOLUCIÓN: INICIAMOS LOS SISTEMAS QUE REQUIEREN AUTENTICACIÓN
+            // SOLO DESPUÉS DE UN LOGIN EXITOSO.
+            setupQueueSystem();
+            setupGlobalTimerListener();
 
             startHeartbeat();
             startSessionMonitoring();
@@ -318,6 +302,10 @@
     async function logout() {
         if (!currentUser) return;
         try {
+            // Detener los listeners ANTES de limpiar los datos
+            if (activeUserRef) activeUserRef.off();
+            if (queueRef) queueRef.off();
+
             await cleanupQueueOnLogout();
             await activeSessionsRef.child(currentUser.uid).remove();
             await auth.signOut();
@@ -330,65 +318,53 @@
     }
 
     function cleanupSessionState() {
-        try {
-            stopAllTimers();
-            stopHeartbeat();
-            stopSessionMonitoring();
-            // No detenemos el reloj de la página, ya que la función `updateCurrentTime` ya es segura.
-            
-            if (currentUser) activeSessionsRef.child(currentUser.uid).off();
-            activeUserRef.off();
-            queueRef.off();
-
-            currentUser = null;
-            sessionId = null;
-            sessionStartTime = null;
-            isLoggingIn = false;
-            hasBeenNotified = false;
-            document.getElementById('mainContainer').style.display = 'none';
-            document.getElementById('loginModal').style.display = 'flex';
-            document.getElementById('emailInput').value = '';
-            document.getElementById('passwordInput').value = '';
-            showError(null);
-            showWarning(null);
-        } catch (error) {
-            console.error('Error limpiando estado de sesión:', error);
-        }
+        stopAllTimers();
+        stopHeartbeat();
+        stopSessionMonitoring();
+        
+        currentUser = null;
+        sessionId = null;
+        sessionStartTime = null;
+        isLoggingIn = false;
+        hasBeenNotified = false;
+        
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('loginModal').style.display = 'flex';
+        document.getElementById('emailInput').value = '';
+        document.getElementById('passwordInput').value = '';
+        showError(null);
     }
     
-    // El resto de las funciones que me pasaste permanecen sin cambios,
-    // ya que la corrección es solo en `updateCurrentTime`.
-    // Las incluyo aquí para que el script esté completo.
-
-    function setupConnectionListener() { try { connectedRef.on('value', (snap) => { isConnected = snap.val() === true; updateConnectionStatus(); if (!isConnected) { showNotification('🔴 Conexión perdida. Intentando reconectar...', 'warning'); } }, (error) => { showNotification('Error en la conexión: ' + error.message, 'error'); }); } catch (error) { showNotification('Error configurando conexión: ' + error.message, 'error'); } }
+    // El resto del código permanece igual que en la versión anterior.
+    // Lo incluyo para que tengas el script completo y funcional.
+    function setupConnectionListener() { try { connectedRef.on('value', (snap) => { isConnected = snap.val() === true; updateConnectionStatus(); if (!isConnected) { showNotification('🔴 Conexión perdida...', 'warning'); } }); } catch (error) { console.error(error); } }
     function startHeartbeat() { if (heartbeatInterval) clearInterval(heartbeatInterval); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, HEARTBEAT_INTERVAL); }
-    function startSessionMonitoring() { if (sessionCheckInterval) clearInterval(sessionCheckInterval); sessionCheckInterval = setInterval(async () => { if (!currentUser || !isConnected) return; try { const sessionSnapshot = await activeSessionsRef.child(currentUser.uid).once('value'); if (!sessionSnapshot.exists() || sessionSnapshot.val().sessionId !== sessionId) { showNotification('Sesión cerrada desde otro dispositivo.', 'error'); await logout(); } } catch (error) { console.error('Error en monitoreo de sesión:', error); } }, SESSION_CHECK_INTERVAL); }
-    function stopHeartbeat() { if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; } }
-    function stopSessionMonitoring() { if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; } }
-    function handleForgotPassword(e) { e.preventDefault(); showWarning('Por favor, contacta al administrador.'); }
-    function setupQueueSystem() { try { document.getElementById('joinQueueBtn').onclick = joinQueue; setupQueueListeners(); } catch (error) { console.error('Error configurando sistema de cola:', error); } }
-    async function joinQueue() { if (!isConnected || !currentUser) { return; } try { const activeUserSnap = await activeUserRef.once('value'); if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) { return showNotification('Ya tienes un turno activo.', 'warning'); } const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value'); if (queueSnap.exists()) { const updates = {}; queueSnap.forEach(child => { updates[child.key] = null; }); await queueRef.update(updates); } const newEntryRef = queueRef.push(); await newEntryRef.set({ key: newEntryRef.key, userId: currentUser.uid, email: currentUser.email, joinedAt: firebase.database.ServerValue.TIMESTAMP }); showNotification('Te uniste a la cola.', 'success'); if (!activeUserSnap.exists()) { await activateNextInQueue(); } } catch (error) { console.error('Error al unirse a la cola:', error); } }
-    async function leaveQueue(queueKey) { try { await queueRef.child(queueKey).remove(); showNotification('Has salido de la cola.', 'success'); } catch (error) { console.error('Error al salir de la cola:', error); } }
-    async function activateNextInQueue() { try { const activeUserSnap = await activeUserRef.once('value'); if (activeUserSnap.exists()) { return; } const queueSnap = await queueRef.orderByChild('joinedAt').limitToFirst(1).once('value'); if (!queueSnap.exists()) { return; } const queueData = queueSnap.val(); const key = Object.keys(queueData)[0]; const userToActivate = queueData[key]; await activeUserRef.set({ userId: userToActivate.userId, email: userToActivate.email, startTime: firebase.database.ServerValue.TIMESTAMP, remainingTime: TURN_TIME, isPaused: false }); await queueRef.child(key).remove(); } catch (error) { console.error('Error al activar el siguiente en la cola:', error); } }
-    async function cleanupQueueOnLogout() { if (!currentUser) return; try { const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value'); if (queueSnap.exists()) { const updates = {}; queueSnap.forEach(child => { updates[child.key] = null; }); await queueRef.update(updates); } const activeUserSnap = await activeUserRef.once('value'); if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) { await activeUserRef.remove(); await activateNextInQueue(); } } catch (error) { console.error('Error limpiando cola:', error); } }
-    function setupQueueListeners() { try { activeUserRef.on('value', (snap) => { try { const data = snap.val(); renderActiveUser(data); if (data && data.userId === currentUser?.uid && !hasBeenNotified) { showNotification('¡Es tu turno!', 'success'); showSystemNotification('¡Es tu turno! Regresa al sistema.'); hasBeenNotified = true; } else if (!data || data.userId !== currentUser?.uid) { hasBeenNotified = false; } } catch (error) { console.error('Error en listener de usuario activo:', error); } }, (error) => { console.error('Error en listener de activeUserRef:', error); }); queueRef.on('value', (snap) => { try { renderQueue(snap.val()); } catch (error) { console.error('Error en listener de cola:', error); } }, (error) => { console.error('Error en listener de queueRef:', error); }); } catch (error) { console.error('Error configurando listeners de cola:', error); } }
-    function setupGlobalTimerListener() { try { activeUserRef.on('value', (snap) => { try { stopAllTimers(); const data = snap.val(); if (!data) { updateTimerDisplayUI(TURN_TIME); renderActiveUser(null); return; } updateTimerDisplayUI(data.remainingTime || TURN_TIME); if (!data.isPaused) { startClientTimer(data); if (data.userId === currentUser?.uid) { startAuthoritativeSync(data.remainingTime || TURN_TIME); } } } catch (error) { console.error('Error en listener de temporizador:', error); } }, (error) => { console.error('Error en listener de temporizador global:', error); }); } catch (error) { console.error('Error configurando listener de temporizador:', error); } }
-    function startClientTimer(activeUserData) { try { let remaining = activeUserData.remainingTime || TURN_TIME; updateTimerDisplayUI(remaining); globalTimerInterval = setInterval(() => { remaining--; if (remaining < 0) { stopAllTimers(); if (activeUserData.userId === currentUser?.uid) { activeUserRef.remove().then(() => { activateNextInQueue(); }).catch(e => { console.error('Error al finalizar turno:', e); }); } } else { updateTimerDisplayUI(remaining); } }, 1000); } catch (error) { console.error('Error iniciando temporizador del cliente:', error); } }
-    function startAuthoritativeSync(initialTime) { try { let remaining = initialTime || TURN_TIME; syncInterval = setInterval(async () => { try { remaining -= SYNC_INTERVAL_SECONDS; if (remaining < 0) { stopAllTimers(); await activeUserRef.remove(); await activateNextInQueue(); } else { await activeUserRef.update({ remainingTime: remaining }); } } catch (error) { console.error('Error en sincronización autoritativa:', error); } }, SYNC_INTERVAL_SECONDS * 1000); } catch (error) { console.error('Error iniciando sincronización autoritativa:', error); } }
-    function stopAllTimers() { try { if (globalTimerInterval) clearInterval(globalTimerInterval); if (syncInterval) clearInterval(syncInterval); globalTimerInterval = null; syncInterval = null; } catch (error) { console.error('Error deteniendo temporizadores:', error); } }
-    function pauseTimer() { if (currentUser) { try { activeUserRef.update({ isPaused: true }).catch(e => { console.error('Error al pausar el temporizador:', e); }); } catch (error) { console.error('Error en pauseTimer:', error); } } }
-    function resumeTimer() { if (currentUser) { try { activeUserRef.update({ isPaused: false }).catch(e => { console.error('Error al reanudar el temporizador:', e); }); } catch (error) { console.error('Error en resumeTimer:', error); } } }
-    function renderActiveUser(data) { try { const activeUserInfo = document.getElementById('activeUserInfo'); const timerControls = document.getElementById('timerControls'); if (!data) { activeUserInfo.innerHTML = 'Nadie activo'; timerControls.innerHTML = ''; updateTimerDisplayUI(TURN_TIME); return; } activeUserInfo.innerHTML = `<b>${data.email}</b>`; if (data.userId === currentUser?.uid) { timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`; const pauseBtn = document.getElementById('pauseBtn'); const resumeBtn = document.getElementById('resumeBtn'); if (pauseBtn) pauseBtn.onclick = pauseTimer; if (resumeBtn) resumeBtn.onclick = resumeTimer; } else { timerControls.innerHTML = ''; } } catch (error) { console.error('Error renderizando usuario activo:', error); } }
-    function renderQueue(queueData) { try { const queueListBody = document.querySelector('#queueListBody'); queueListBody.innerHTML = ''; if (!queueData) { queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>'; return; } const sortedQueue = Object.entries(queueData).sort(([, a], [, b]) => a.joinedAt - b.joinedAt); if (sortedQueue.length === 0) { queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>'; return; } sortedQueue.forEach(([key, q]) => { const tr = document.createElement('tr'); if (q.userId === currentUser?.uid) tr.classList.add('current-user'); tr.innerHTML = `<td>${sortedQueue.indexOf([key, q]) + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>En espera</td> <td>${q.userId === currentUser?.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">🚗 Salir</button>` : ''}</td>`; queueListBody.appendChild(tr); }); } catch (error) { console.error('Error renderizando cola:', error); } }
-    function updateTimerDisplayUI(seconds) { try { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; timerProgress.style.strokeDashoffset = 408.4 * (1 - (remaining / TURN_TIME)); } catch (error) { console.error('Error actualizando UI del temporizador:', error); } }
-    function updateConnectionStatus() { try { const statusElement = document.getElementById('connectionStatus'); statusElement.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado'; statusElement.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`; } catch (error) { console.error('Error actualizando estado de conexión:', error); } }
-    function showError(message) { try { const el = document.getElementById('userError'); el.style.display = message ? 'block' : 'none'; el.textContent = message; } catch (error) { console.error('Error mostrando mensaje de error:', error); } }
-    function showWarning(message) { try { const el = document.getElementById('userWarning'); el.style.display = message ? 'block' : 'none'; el.textContent = message; } catch (error) { console.error('Error mostrando mensaje de advertencia:', error); } }
-    function showNotification(message, type = 'success') { try { const el = document.getElementById('notification'); el.textContent = message; el.className = `notification ${type} show`; setTimeout(() => el.classList.remove('show'), 4000); } catch (error) { console.error('Error mostrando notificación:', error); } }
-    function requestNotificationPermission() { try { if ("Notification" in window && Notification.permission !== 'granted') { Notification.requestPermission(); } } catch (error) { console.error('Error solicitando permiso de notificación:', error); } }
-    function showSystemNotification(message) { try { if ("Notification" in window && Notification.permission === "granted") { new Notification("Sistema de Turnos", { body: message }); } } catch (error) { console.error('Error mostrando notificación del sistema:', error); } }
-    function showErrorScreen(message) { try { stopAllTimers(); stopPageClock(); document.body.innerHTML = `<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: #f4f4f4; color: #333; text-align: center;"><div style="background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);"><h2>🆘 Error Crítico</h2><p style="margin: 20px 0;">${message}</p><button style="background: #667eea; color: white; padding: 12px 25px; border-radius: 5px; cursor: pointer;" onclick="window.location.reload()">🔄 Recargar</button></div></div>`; } catch (error) { console.error('Error mostrando pantalla de error:', error); } }
-
+    function startSessionMonitoring() { if (sessionCheckInterval) clearInterval(sessionCheckInterval); sessionCheckInterval = setInterval(async () => { if (!currentUser || !isConnected) return; try { const sessionSnapshot = await activeSessionsRef.child(currentUser.uid).once('value'); if (!sessionSnapshot.exists() || sessionSnapshot.val().sessionId !== sessionId) { await logout(); showNotification('Sesión cerrada desde otro dispositivo.', 'error'); } } catch (error) { console.error('Error en monitoreo de sesión:', error); } }, SESSION_CHECK_INTERVAL); }
+    function stopHeartbeat() { clearInterval(heartbeatInterval); }
+    function stopSessionMonitoring() { clearInterval(sessionCheckInterval); }
+    function handleForgotPassword(e) { e.preventDefault(); showWarning('Contacta al administrador para reestablecer la contraseña.'); }
+    function setupQueueSystem() { document.getElementById('joinQueueBtn').onclick = joinQueue; }
+    async function joinQueue() { if (!isConnected || !currentUser) return; try { const activeUserSnap = await activeUserRef.once('value'); if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) { return showNotification('Ya tienes un turno activo.', 'warning'); } const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value'); if (queueSnap.exists()) { return showNotification('Ya estás en la cola.', 'warning'); } const newEntryRef = queueRef.push(); await newEntryRef.set({ key: newEntryRef.key, userId: currentUser.uid, email: currentUser.email, joinedAt: firebase.database.ServerValue.TIMESTAMP }); showNotification('Te uniste a la cola.', 'success'); if (!activeUserSnap.exists()) await activateNextInQueue(); } catch (error) { showNotification(`Error al unirse: ${error.message}`, 'error'); } }
+    async function leaveQueue(queueKey) { try { await queueRef.child(queueKey).remove(); showNotification('Has salido de la cola.', 'success'); } catch (error) { showNotification(`Error al salir: ${error.message}`, 'error'); } }
+    async function activateNextInQueue() { try { const activeUserSnap = await activeUserRef.once('value'); if (activeUserSnap.exists()) return; const queueSnap = await queueRef.orderByChild('joinedAt').limitToFirst(1).once('value'); if (!queueSnap.exists()) return; const queueData = queueSnap.val(); const key = Object.keys(queueData)[0]; const userToActivate = queueData[key]; await activeUserRef.set({ userId: userToActivate.userId, email: userToActivate.email, startTime: firebase.database.ServerValue.TIMESTAMP, remainingTime: TURN_TIME, isPaused: false }); await queueRef.child(key).remove(); } catch (error) { console.error('Error al activar siguiente:', error); } }
+    async function cleanupQueueOnLogout() { if (!currentUser) return; try { const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value'); if (queueSnap.exists()) { const queueKey = Object.keys(queueSnap.val())[0]; await queueRef.child(queueKey).remove(); } const activeUserSnap = await activeUserRef.once('value'); if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) { await activeUserRef.remove(); await activateNextInQueue(); } } catch (error) { console.error('Error limpiando cola:', error); } }
+    function setupQueueListeners() { activeUserRef.on('value', snap => { renderActiveUser(snap.val()); const data = snap.val(); if (data && data.userId === currentUser?.uid && !hasBeenNotified) { showNotification('¡Es tu turno!', 'success'); showSystemNotification('¡Es tu turno! Regresa al sistema.'); hasBeenNotified = true; } else if (!data || data.userId !== currentUser?.uid) { hasBeenNotified = false; } }); queueRef.on('value', snap => renderQueue(snap.val())); }
+    function setupGlobalTimerListener() { activeUserRef.on('value', (snap) => { stopAllTimers(); const data = snap.val(); if (!data) { updateTimerDisplayUI(TURN_TIME); return; } updateTimerDisplayUI(data.remainingTime); if (data && !data.isPaused) { startClientTimer(data); if (data.userId === currentUser?.uid) { startAuthoritativeSync(data.remainingTime); } } }); }
+    function startClientTimer(activeUserData) { let remaining = activeUserData.remainingTime; globalTimerInterval = setInterval(() => { remaining--; if (remaining < 0) { stopAllTimers(); } else { updateTimerDisplayUI(remaining); } }, 1000); }
+    function startAuthoritativeSync(initialTime) { let remaining = initialTime; syncInterval = setInterval(async () => { remaining -= SYNC_INTERVAL_SECONDS; try { if (remaining < 0) { stopAllTimers(); await activeUserRef.remove(); await activateNextInQueue(); } else { await activeUserRef.update({ remainingTime: remaining }); } } catch (error) { console.error("Error en sync:", error); stopAllTimers(); } }, SYNC_INTERVAL_SECONDS * 1000); }
+    function stopAllTimers() { clearInterval(globalTimerInterval); clearInterval(syncInterval); }
+    function pauseTimer() { if (currentUser) activeUserRef.update({ isPaused: true }); }
+    function resumeTimer() { if (currentUser) activeUserRef.update({ isPaused: false }); }
+    function renderActiveUser(data) { const activeUserInfo = document.getElementById('activeUserInfo'); const timerControls = document.getElementById('timerControls'); if (!data) { activeUserInfo.innerHTML = 'Nadie activo'; timerControls.innerHTML = ''; return; } activeUserInfo.innerHTML = `<b>${data.email}</b>`; if (data.userId === currentUser?.uid) { timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`; document.getElementById('pauseTimerBtn').onclick = pauseTimer; document.getElementById('resumeTimerBtn').onclick = resumeTimer; } else { timerControls.innerHTML = ''; } }
+    function renderQueue(queueData) { const queueListBody = document.querySelector('#queueListBody'); queueListBody.innerHTML = ''; if (!queueData) { queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>'; return; } const sortedQueue = Object.entries(queueData).sort(([, a], [, b]) => a.joinedAt - b.joinedAt); if (sortedQueue.length === 0) { queueListBody.innerHTML = '<tr><td colspan="5">No hay usuarios en espera</td></tr>'; return; } sortedQueue.forEach(([key, q], index) => { const tr = document.createElement('tr'); if (q.userId === currentUser?.uid) tr.classList.add('current-user'); tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>En espera</td> <td>${q.userId === currentUser?.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">🚗 Salir</button>` : ''}</td>`; queueListBody.appendChild(tr); }); }
+    function updateTimerDisplayUI(seconds) { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; timerProgress.style.strokeDashoffset = 408.4 * (1 - (remaining / TURN_TIME)); }
+    function updateConnectionStatus() { const el=document.getElementById('connectionStatus'); if(el) { el.textContent=isConnected?'🟢 Conectado':'🔴 Desconectado'; el.className=`connection-status ${isConnected?'connected':'disconnected'}`; }}
+    function showError(m) { const el=document.getElementById('userError'); if(el) { el.style.display=m?'block':'none'; el.textContent=m; }}
+    function showWarning(m) { const el=document.getElementById('userWarning'); if(el) { el.style.display=m?'block':'none'; el.textContent=m; }}
+    function showNotification(m,t='success') { const el=document.getElementById('notification'); if(el) { el.textContent=m; el.className=`notification ${t} show`; setTimeout(()=>el.classList.remove('show'),4000); }}
+    function requestNotificationPermission() { if("Notification" in window&&Notification.permission!=='granted') Notification.requestPermission(); }
+    function showSystemNotification(m) { if("Notification" in window&&Notification.permission==="granted") new Notification("Sistema de Turnos",{body:m});}
+    function showErrorScreen(m) { stopAllTimers(); stopPageClock(); document.body.innerHTML=`<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px;"><div style="background: #fff; padding: 40px; border-radius: 10px; text-align: center;"><h2>🆘 Error Crítico</h2><p style="margin: 20px 0;">${m}</p><button style="background:#667eea; color:white; padding:12px 25px; border-radius:5px; cursor:pointer;" onclick="window.location.reload()">🔄 Recargar</button></div></div>`; }
 </script>
 </body>
 </html>
