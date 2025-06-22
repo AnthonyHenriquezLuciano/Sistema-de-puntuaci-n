@@ -304,15 +304,9 @@
                 const user = userCredential.user;
                 
                 const sessionRef = activeSessionsRef.child(user.uid);
-                const sessionSnapshot = await sessionRef.once('value');
-                if (sessionSnapshot.exists()) {
-                    await auth.signOut();
-                    throw new Error(`El usuario ${email} ya tiene una sesión activa.`);
-                }
-
-                sessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
                 await sessionRef.set({
-                    userId: user.uid, email: user.email, sessionId: sessionId,
+                    userId: user.uid, email: user.email, 
+                    sessionId: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                     loginTime: firebase.database.ServerValue.TIMESTAMP
                 });
                 await sessionRef.onDisconnect().remove();
@@ -340,7 +334,9 @@
             try {
                 stopAllTimersAndListeners();
                 await cleanupQueueOnLogout();
-                await activeSessionsRef.child(currentUser.uid).remove();
+                if(currentUser && currentUser.uid) {
+                    await activeSessionsRef.child(currentUser.uid).remove();
+                }
                 await auth.signOut();
             } catch (error) { 
                 console.error('Error en logout:', error);
@@ -351,7 +347,7 @@
 
         function cleanupSessionState() {
             stopAllTimersAndListeners();
-            currentUser = null; sessionId = null; isLoggingIn = false; currentActiveUserId = null;
+            currentUser = null; currentActiveUserId = null; isLoggingIn = false;
             
             document.getElementById('mainContainer').style.display = 'none';
             document.getElementById('loginModal').style.display = 'flex';
@@ -364,12 +360,12 @@
             e.preventDefault();
             const email = document.getElementById('emailInput').value.trim();
             if (!email) {
-                showError("Por favor, ingresa tu correo electrónico para restablecer la contraseña.");
+                showError("Por favor, ingresa tu correo para restablecer la contraseña.");
                 return;
             }
             try {
                 await auth.sendPasswordResetEmail(email);
-                showNotification(`Se ha enviado un enlace para restablecer la contraseña a ${email}`, 'success');
+                showNotification(`Se ha enviado un enlace a ${email}`, 'success');
                 showError(null);
             } catch (error) {
                 showError(error.message);
@@ -381,9 +377,9 @@
             setupQueueListeners();
             activateNextInQueue();
         }
-
+        
         // ========================================================================
-        //  FUNCIÓN CORREGIDA PARA EVITAR INTERFERENCIA CON EL TEMPORIZADOR ACTIVO
+        // FUNCIÓN 'joinQueue' CORREGIDA PARA PROMOVER A USUARIO SI LA COLA ESTÁ VACÍA
         // ========================================================================
         async function joinQueue() {
             if (!isConnected || !currentUser) return;
@@ -391,6 +387,7 @@
             joinBtn.disabled = true;
 
             try {
+                // Verificar si ya estoy activo o en la cola
                 const activeUserSnap = await activeUserRef.once('value');
                 if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
                     showNotification('Ya tienes un turno activo.', 'warning');
@@ -402,6 +399,7 @@
                     return;
                 }
 
+                // Añadirme a la cola
                 const newEntryRef = queueRef.push();
                 await newEntryRef.set({
                     key: newEntryRef.key,
@@ -409,9 +407,15 @@
                     email: currentUser.email,
                     joinedAt: firebase.database.ServerValue.TIMESTAMP
                 });
-
                 showNotification('Te uniste a la cola.', 'success');
-                // La llamada a activateNextInQueue() fue eliminada de aquí para no interferir.
+
+                // LÓGICA CORREGIDA: Después de unirme, revisar si el puesto activo está libre.
+                // Si lo está, intentar tomar el turno. Esto es seguro y no interfiere con turnos activos.
+                const currentActiveUser = (await activeUserRef.once('value')).val();
+                if (!currentActiveUser) {
+                    console.log("El puesto activo está libre. Intentando activar el siguiente turno...");
+                    activateNextInQueue();
+                }
                 
             } catch (error) { 
                 showNotification(`Error al unirse: ${error.message}`, 'error'); 
@@ -469,14 +473,11 @@
                 });
 
                 if (committed) {
-                    console.log(`Usuario ${userData.email} activado exitosamente.`);
+                    console.log(`Usuario ${userData.email} activado.`);
                     await queueRef.child(key).remove();
-                } else {
-                    console.log("Activación de turno perdida por condición de carrera. Otro cliente fue más rápido.");
                 }
             } catch (error) {
                 console.error('Error crítico en activateNextInQueue:', error);
-                showNotification('Error al activar el siguiente turno.', 'error');
             }
         }
 
@@ -492,7 +493,7 @@
                 if (sessionSnap.exists()) {
                     return userInQueue;
                 } else {
-                    console.log(`Limpiando usuario desconectado ${userInQueue.email} de la cola.`);
+                    console.log(`Limpiando usuario fantasma ${userInQueue.email} de la cola.`);
                     await queueRef.child(key).remove();
                 }
             }
@@ -518,7 +519,6 @@
 
             const timersAreRunning = globalTimerInterval || syncInterval;
             if (activeUserData && !activeUserData.isPaused && !timersAreRunning) {
-                console.log("Iniciando temporizadores para:", activeUserData.email);
                 if (activeUserData.userId === currentUser?.uid) {
                     startClientTimer(activeUserData);
                     startAuthoritativeSync();
@@ -526,14 +526,11 @@
                     startClientTimer(activeUserData);
                 }
             } else if ((!activeUserData || (activeUserData && activeUserData.isPaused)) && timersAreRunning) {
-                console.log("Deteniendo temporizadores.");
                 stopAllTimers();
             }
 
             if (newActiveUserId !== currentActiveUserId) {
-                console.log(`CAMBIO DE ESTADO: El turno pasó de '${currentActiveUserId}' a '${newActiveUserId}'.`);
                 currentActiveUserId = newActiveUserId;
-
                 if (newActiveUserId) {
                     if (newActiveUserId === currentUser?.uid) {
                         showTurnNotification();
@@ -551,7 +548,6 @@
                 updateTimerDisplayUI(activeUserData.remainingTime);
             }
         }
-
 
         function startClientTimer(activeUserData) {
             let remaining = activeUserData.remainingTime;
