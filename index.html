@@ -234,7 +234,7 @@
         let heartbeatInterval = null, globalTimerInterval = null, syncInterval = null, pageClockInterval = null, titleNotificationInterval = null;
         let isConnected = false, isLoggingIn = false;
         let originalTitle = document.title;
-        let currentActiveUserId = null; // <<< VARIABLE CLAVE PARA LA CORRECCIÓN
+        let currentActiveUserId = null;
 
         const HEARTBEAT_INTERVAL_MS = 30000;
         const TURN_TIME_SECONDS = 15 * 60;
@@ -382,6 +382,9 @@
             activateNextInQueue();
         }
 
+        // ========================================================================
+        //  FUNCIÓN CORREGIDA PARA EVITAR INTERFERENCIA CON EL TEMPORIZADOR ACTIVO
+        // ========================================================================
         async function joinQueue() {
             if (!isConnected || !currentUser) return;
             const joinBtn = document.getElementById('joinQueueBtn');
@@ -408,7 +411,8 @@
                 });
 
                 showNotification('Te uniste a la cola.', 'success');
-                activateNextInQueue();
+                // La llamada a activateNextInQueue() fue eliminada de aquí para no interferir.
+                
             } catch (error) { 
                 showNotification(`Error al unirse: ${error.message}`, 'error'); 
             } finally {
@@ -502,24 +506,18 @@
         }
         
         function setupQueueListeners() {
-            activeUserRef.on('value', handleActiveUserChange); // <<< ESTA FUNCIÓN FUE CORREGIDA
+            activeUserRef.on('value', handleActiveUserChange);
             queueRef.on('value', snap => renderQueue(snap.val()));
         }
 
-        // =================================================================================
-        //  FUNCIÓN CORREGIDA PARA SOLUCIONAR EL BUCLE DE NOTIFICACIONES Y REINICIO DE TIMER
-        // =================================================================================
         function handleActiveUserChange(snap) {
             const activeUserData = snap.val();
             const newActiveUserId = activeUserData ? activeUserData.userId : null;
 
-            // Renderiza siempre la UI para reflejar cambios (ej. botones de pausa/reanudar)
             renderActiveUser(activeUserData);
 
-            // Lógica de temporizadores: se basa en el estado de pausa y si ya están corriendo.
             const timersAreRunning = globalTimerInterval || syncInterval;
             if (activeUserData && !activeUserData.isPaused && !timersAreRunning) {
-                // Si hay un usuario activo, no está en pausa y los timers están detenidos -> INICIARLOS
                 console.log("Iniciando temporizadores para:", activeUserData.email);
                 if (activeUserData.userId === currentUser?.uid) {
                     startClientTimer(activeUserData);
@@ -528,34 +526,27 @@
                     startClientTimer(activeUserData);
                 }
             } else if ((!activeUserData || (activeUserData && activeUserData.isPaused)) && timersAreRunning) {
-                // Si no hay usuario o está en pausa y los timers están corriendo -> DETENERLOS
                 console.log("Deteniendo temporizadores.");
                 stopAllTimers();
             }
 
-            // Lógica de Notificación y Estado (SOLO SE EJECUTA SI EL USUARIO ACTIVO CAMBIA)
             if (newActiveUserId !== currentActiveUserId) {
                 console.log(`CAMBIO DE ESTADO: El turno pasó de '${currentActiveUserId}' a '${newActiveUserId}'.`);
-                currentActiveUserId = newActiveUserId; // Actualiza el estado local
+                currentActiveUserId = newActiveUserId;
 
                 if (newActiveUserId) {
-                    // Un nuevo usuario está activo
                     if (newActiveUserId === currentUser?.uid) {
-                        // El nuevo usuario activo soy yo. ¡Mostrar notificación UNA VEZ!
                         showTurnNotification();
                     } else {
-                        // El nuevo usuario activo es otro. Detener mi notificación.
                         stopTitleNotification();
                     }
                 } else {
-                    // Ya no hay nadie activo
                     stopTitleNotification();
                     updateTimerDisplayUI(TURN_TIME_SECONDS);
                     activateNextInQueue();
                 }
             }
             
-            // Actualizar el reloj de la UI si hay un usuario activo
             if(activeUserData) {
                 updateTimerDisplayUI(activeUserData.remainingTime);
             }
