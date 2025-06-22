@@ -217,8 +217,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
     <script>
-        // NOTA: Para un entorno de producción real, considera migrar al SDK modular de Firebase v9+
-        // para optimizar el tamaño de la aplicación (tree-shaking).
         const firebaseConfig = {
             // TU CONFIGURACIÓN DE FIREBASE AQUÍ
              apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
@@ -236,6 +234,7 @@
         let heartbeatInterval = null, globalTimerInterval = null, syncInterval = null, pageClockInterval = null, titleNotificationInterval = null;
         let isConnected = false, isLoggingIn = false;
         let originalTitle = document.title;
+        let currentActiveUserId = null; // <<< VARIABLE CLAVE PARA LA CORRECCIÓN
 
         const HEARTBEAT_INTERVAL_MS = 30000;
         const TURN_TIME_SECONDS = 15 * 60;
@@ -255,7 +254,6 @@
                 database = firebase.database();
                 auth = firebase.auth();
                 
-                // Referencias de la base de datos
                 activeSessionsRef = database.ref(ACTIVE_SESSIONS_PATH);
                 connectedRef = database.ref('.info/connected');
                 queueRef = database.ref(QUEUE_PATH);
@@ -270,7 +268,6 @@
             }
         }
         
-        // --- LÓGICA DE RELOJ DE PÁGINA ---
         function startPageClock() {
             if (pageClockInterval) clearInterval(pageClockInterval);
             pageClockInterval = setInterval(updateCurrentTime, 1000);
@@ -283,7 +280,6 @@
             }
         }
 
-        // --- LÓGICA DE SESIÓN ---
         function setupLoginUI() {
             document.getElementById('loginModal').style.display = 'flex';
             document.getElementById('loginButton').onclick = handleLoginClick;
@@ -341,8 +337,6 @@
 
         async function logout() {
             if (!currentUser) return;
-            // Opcional: Pedir confirmación
-            // if (!confirm("¿Seguro que quieres cerrar sesión?")) return;
             try {
                 stopAllTimersAndListeners();
                 await cleanupQueueOnLogout();
@@ -357,7 +351,7 @@
 
         function cleanupSessionState() {
             stopAllTimersAndListeners();
-            currentUser = null; sessionId = null; isLoggingIn = false;
+            currentUser = null; sessionId = null; isLoggingIn = false; currentActiveUserId = null;
             
             document.getElementById('mainContainer').style.display = 'none';
             document.getElementById('loginModal').style.display = 'flex';
@@ -382,11 +376,9 @@
             }
         }
 
-        // --- LÓGICA DE COLA Y TURNOS ---
         function setupQueueSystem() {
             document.getElementById('joinQueueBtn').onclick = joinQueue;
             setupQueueListeners();
-            // Iniciar una verificación inicial al conectarse
             activateNextInQueue();
         }
 
@@ -416,7 +408,6 @@
                 });
 
                 showNotification('Te uniste a la cola.', 'success');
-                // Después de unirse, verificar si el turno activo está vacío para tomarlo
                 activateNextInQueue();
             } catch (error) { 
                 showNotification(`Error al unirse: ${error.message}`, 'error'); 
@@ -438,13 +429,11 @@
         async function cleanupQueueOnLogout() {
             if (!currentUser) return;
             try {
-                // Salir de la cola de espera
                 const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value');
                 if (queueSnap.exists()) {
                     const queueKey = Object.keys(queueSnap.val())[0];
                     await queueRef.child(queueKey).remove();
                 }
-                // Si era el usuario activo, ceder el turno
                 const activeUserSnap = await activeUserRef.once('value');
                 if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
                     await endTurnAndActivateNext();
@@ -454,21 +443,14 @@
             }
         }
 
-        // --- LÓGICA DE TRANSICIÓN DE TURNOS (CORREGIDO) ---
-
-        /**
-         * Lógica principal para avanzar la cola. Usa transacciones para ser atómica y segura.
-         */
         async function activateNextInQueue() {
             try {
-                // Busca el siguiente usuario válido en la cola (que esté online)
                 const nextUserInQueue = await findNextValidUserInQueue();
                 if (!nextUserInQueue) {
                     console.log("No hay usuarios válidos en la cola.");
                     return;
                 }
                 
-                // Extrae los datos del usuario a activar
                 const { key, ...userData } = nextUserInQueue;
                 const newActiveUserData = {
                     userId: userData.userId,
@@ -478,18 +460,14 @@
                     isPaused: false
                 };
 
-                // Intenta tomar el puesto de "usuario activo" usando una transacción
                 const { committed } = await activeUserRef.transaction(currentData => {
                     return currentData === null ? newActiveUserData : undefined;
                 });
 
                 if (committed) {
-                    // Si la transacción tuvo éxito, significa que este cliente asignó el turno.
-                    // Ahora, se debe eliminar al usuario de la cola.
                     console.log(`Usuario ${userData.email} activado exitosamente.`);
                     await queueRef.child(key).remove();
                 } else {
-                    // La transacción falló, otro cliente asignó el turno. No hacemos nada.
                     console.log("Activación de turno perdida por condición de carrera. Otro cliente fue más rápido.");
                 }
             } catch (error) {
@@ -498,10 +476,6 @@
             }
         }
 
-        /**
-         * Barre la cola para encontrar el primer usuario que sigue conectado.
-         * Limpia a los usuarios desconectados que encuentre.
-         */
         async function findNextValidUserInQueue() {
             const queueSnap = await queueRef.orderByChild('joinedAt').once('value');
             if (!queueSnap.exists()) return null;
@@ -512,68 +486,82 @@
                 const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
                 
                 if (sessionSnap.exists()) {
-                    return userInQueue; // Devuelve el primer usuario válido y conectado
+                    return userInQueue;
                 } else {
-                    // Usuario fantasma en la cola. Limpiarlo.
                     console.log(`Limpiando usuario desconectado ${userInQueue.email} de la cola.`);
                     await queueRef.child(key).remove();
                 }
             }
-            return null; // No se encontraron usuarios conectados en la cola
+            return null;
         }
 
-        /**
-         * Función que se llama cuando el tiempo de un usuario ha terminado.
-         */
         async function endTurnAndActivateNext() {
             console.log("Finalizando turno y activando al siguiente.");
             await activeUserRef.remove();
             await activateNextInQueue();
         }
-
-        // --- LISTENERS Y TEMPORIZADORES ---
         
         function setupQueueListeners() {
-            activeUserRef.on('value', handleActiveUserChange);
+            activeUserRef.on('value', handleActiveUserChange); // <<< ESTA FUNCIÓN FUE CORREGIDA
             queueRef.on('value', snap => renderQueue(snap.val()));
         }
 
+        // =================================================================================
+        //  FUNCIÓN CORREGIDA PARA SOLUCIONAR EL BUCLE DE NOTIFICACIONES Y REINICIO DE TIMER
+        // =================================================================================
         function handleActiveUserChange(snap) {
-            stopAllTimers(); // Detiene cualquier temporizador anterior
             const activeUserData = snap.val();
+            const newActiveUserId = activeUserData ? activeUserData.userId : null;
 
+            // Renderiza siempre la UI para reflejar cambios (ej. botones de pausa/reanudar)
             renderActiveUser(activeUserData);
 
-            if (activeUserData) {
-                updateTimerDisplayUI(activeUserData.remainingTime);
-
-                // Si es mi turno
+            // Lógica de temporizadores: se basa en el estado de pausa y si ya están corriendo.
+            const timersAreRunning = globalTimerInterval || syncInterval;
+            if (activeUserData && !activeUserData.isPaused && !timersAreRunning) {
+                // Si hay un usuario activo, no está en pausa y los timers están detenidos -> INICIARLOS
+                console.log("Iniciando temporizadores para:", activeUserData.email);
                 if (activeUserData.userId === currentUser?.uid) {
-                    showTurnNotification();
-                    if (!activeUserData.isPaused) {
-                        startClientTimer(activeUserData);
-                        startAuthoritativeSync(); // El usuario activo se vuelve la fuente de verdad del tiempo
+                    startClientTimer(activeUserData);
+                    startAuthoritativeSync();
+                } else {
+                    startClientTimer(activeUserData);
+                }
+            } else if ((!activeUserData || (activeUserData && activeUserData.isPaused)) && timersAreRunning) {
+                // Si no hay usuario o está en pausa y los timers están corriendo -> DETENERLOS
+                console.log("Deteniendo temporizadores.");
+                stopAllTimers();
+            }
+
+            // Lógica de Notificación y Estado (SOLO SE EJECUTA SI EL USUARIO ACTIVO CAMBIA)
+            if (newActiveUserId !== currentActiveUserId) {
+                console.log(`CAMBIO DE ESTADO: El turno pasó de '${currentActiveUserId}' a '${newActiveUserId}'.`);
+                currentActiveUserId = newActiveUserId; // Actualiza el estado local
+
+                if (newActiveUserId) {
+                    // Un nuevo usuario está activo
+                    if (newActiveUserId === currentUser?.uid) {
+                        // El nuevo usuario activo soy yo. ¡Mostrar notificación UNA VEZ!
+                        showTurnNotification();
+                    } else {
+                        // El nuevo usuario activo es otro. Detener mi notificación.
+                        stopTitleNotification();
                     }
                 } else {
-                    // Si es el turno de otro
+                    // Ya no hay nadie activo
                     stopTitleNotification();
-                    if (!activeUserData.isPaused) {
-                        startClientTimer(activeUserData); // Solo actualizo mi UI
-                    }
+                    updateTimerDisplayUI(TURN_TIME_SECONDS);
+                    activateNextInQueue();
                 }
-            } else {
-                // No hay nadie activo
-                stopTitleNotification();
-                updateTimerDisplayUI(TURN_TIME_SECONDS);
-                // Si hay gente en cola, intentar activar al siguiente
-                activateNextInQueue();
+            }
+            
+            // Actualizar el reloj de la UI si hay un usuario activo
+            if(activeUserData) {
+                updateTimerDisplayUI(activeUserData.remainingTime);
             }
         }
 
-        /**
-         * Temporizador visual (se ejecuta en todos los clientes).
-         * Solo actualiza la UI cada segundo.
-         */
+
         function startClientTimer(activeUserData) {
             let remaining = activeUserData.remainingTime;
             globalTimerInterval = setInterval(() => {
@@ -586,11 +574,6 @@
             }, 1000);
         }
 
-        /**
-         * Temporizador autoritativo (solo se ejecuta en el cliente con el turno activo).
-         * Sincroniza el tiempo restante con Firebase cada 5 segundos.
-         * Es el responsable de finalizar el turno.
-         */
         function startAuthoritativeSync() {
             syncInterval = setInterval(async () => {
                 try {
@@ -635,8 +618,6 @@
 
         function pauseTimer() { if (currentUser) activeUserRef.update({ isPaused: true }); }
         function resumeTimer() { if (currentUser) activeUserRef.update({ isPaused: false }); }
-
-        // --- RENDERIZADO Y UTILIDADES ---
 
         function renderActiveUser(data) {
             const activeUserInfo = document.getElementById('activeUserInfo');
@@ -705,7 +686,6 @@
             connectedRef.on('value', (snap) => { 
                 isConnected = snap.val() === true; 
                 updateConnectionStatus(); 
-                // Si me reconecto y no hay nadie activo, intento reactivar la cola
                 if(isConnected && currentUser) {
                     activeUserRef.once('value', snap => {
                        if(!snap.exists()) {
@@ -741,14 +721,12 @@
         
         function showTurnNotification() {
             showNotification('¡Es tu turno!', 'success');
-            // Notificación nativa del navegador
             if (Notification.permission === "granted") {
                 new Notification("Sistema de Turnos", {
                     body: "¡Es tu turno! Tienes 15 minutos.",
-                    icon: "/favicon.ico" // Opcional: añade un ícono
+                    icon: "/favicon.ico"
                 });
             }
-            // Notificación en el título de la página
             stopTitleNotification();
             let isTitleVisible = true;
             titleNotificationInterval = setInterval(() => {
