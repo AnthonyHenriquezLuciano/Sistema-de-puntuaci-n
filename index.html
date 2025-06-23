@@ -118,7 +118,7 @@
         .leave-queue-btn { background-color: var(--color-danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: background-color 0.2s ease; }
         .leave-queue-btn:hover { background-color: #c82333; }
 
-        /* --- Estilos para el nuevo panel de resumen --- */
+        /* --- Estilos para el panel de resumen --- */
         .summary-panel { display: none; } /* Oculto por defecto */
         .summary-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; text-align: center; }
         .stat-item { background: var(--color-background); padding: 15px; border-radius: var(--border-radius); }
@@ -186,8 +186,7 @@
         
         <div class="card summary-panel" id="summaryPanel">
             <h3>Tu Resumen de Espera</h3>
-            <div class="summary-stats" id="summaryStats">
-                </div>
+            <div class="summary-stats" id="summaryStats"></div>
         </div>
 
         <div class="card queue-panel">
@@ -416,36 +415,42 @@
                 joinBtn.disabled = false;
             }
         }
-
-        async function endTurnAndActivateNext() {
+        
+        /**
+         * Lógica de avance de turno, CORREGIDA Y ROBUSTA.
+         */
+        async function promoteNextUser() {
             const nextUser = await findNextValidUserInQueue();
 
             if (nextUser) {
+                console.log(`Promoviendo a ${nextUser.email} al turno activo.`);
                 const newActiveUserData = {
                     userId: nextUser.userId,
                     email: nextUser.email,
                     isPaused: false,
-                    // Estos dos campos se establecen juntos para la sincronización
                     remainingTime: TURN_TIME_SECONDS,
                     lastUpdated: firebase.database.ServerValue.TIMESTAMP 
                 };
                 await activeUserRef.set(newActiveUserData);
+                // INMEDIATAMENTE después de promoverlo, lo quitamos de la cola de espera.
                 await queueRef.child(nextUser.key).remove();
             } else {
+                console.log("No hay nadie más en la cola. Limpiando el turno activo.");
                 await activeUserRef.set(null); 
             }
         }
-
+        
         async function activateNextInQueue() {
             const snap = await activeUserRef.once('value');
             if (snap.exists()) {
                 const activeUser = snap.val();
                 const sessionSnap = await activeSessionsRef.child(activeUser.userId).once('value');
                 if(!sessionSnap.exists() || sessionSnap.val().status !== 'active') {
-                    await endTurnAndActivateNext();
+                    console.log(`Limpiando turno fantasma de ${activeUser.email}`);
+                    await promoteNextUser();
                 }
             } else {
-                await endTurnAndActivateNext();
+                await promoteNextUser();
             }
         }
         
@@ -459,10 +464,10 @@
                 const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
                 
                 if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
-                    return userInQueue;
+                    return userInQueue; // Devuelve el primer usuario válido y conectado.
                 }
             }
-            return null;
+            return null; // No hay nadie válido en la cola.
         }
         
         // --- LISTENERS Y TEMPORIZADORES ---
@@ -471,7 +476,7 @@
             queueRef.on('value', (snap) => {
                 const queueData = snap.val();
                 renderQueue(queueData);
-                updateSummaryPanel(queueData); // Actualizar resumen cuando la cola cambia
+                updateSummaryPanel(queueData);
             });
         }
 
@@ -480,7 +485,7 @@
             const newActiveUserId = activeUserData ? activeUserData.userId : null;
 
             renderActiveUser(activeUserData);
-            updateSummaryPanel(); // Actualizar resumen cuando el usuario activo cambia
+            updateSummaryPanel();
             stopAllTimers();
 
             if (activeUserData && !activeUserData.isPaused) {
@@ -501,7 +506,10 @@
         }
 
         function startClientTimer(activeUserData) {
-            if (!activeUserData.lastUpdated) return;
+            if (!activeUserData.lastUpdated) {
+                setTimeout(() => activeUserRef.once('value', snap => handleActiveUserChange(snap)), 500);
+                return;
+            }
             
             globalTimerInterval = setInterval(() => {
                 const serverNow = Date.now() + serverTimeOffset;
@@ -509,7 +517,6 @@
                 const elapsedSeconds = Math.floor(elapsedMillis / 1000);
                 const remaining = activeUserData.remainingTime - elapsedSeconds;
                 
-                // Actualizamos el panel de resumen con el tiempo en vivo
                 updateSummaryPanel(null, remaining);
 
                 if (remaining >= 0) {
@@ -538,9 +545,8 @@
                     
                     if (remaining <= 0) {
                         stopAllTimers();
-                        await endTurnAndActivateNext();
+                        await promoteNextUser();
                     } else {
-                        // Actualizamos el "reloj maestro" en Firebase
                         await activeUserRef.update({
                             remainingTime: remaining,
                             lastUpdated: firebase.database.ServerValue.TIMESTAMP
@@ -556,9 +562,8 @@
         // --- LÓGICA DE PAUSA/REANUDAR (CORREGIDA) ---
         async function pauseTimer() {
             if (!currentUser) return;
-            // Al pausar, calculamos el tiempo restante y lo guardamos
             const snap = await activeUserRef.once('value');
-            if(!snap.exists()) return;
+            if(!snap.exists() || snap.val().userId !== currentUser.uid) return;
 
             const serverNow = Date.now() + serverTimeOffset;
             const elapsed = Math.floor((serverNow - snap.val().lastUpdated) / 1000);
@@ -566,14 +571,12 @@
 
             activeUserRef.update({ 
                 isPaused: true,
-                remainingTime: Math.max(0, remaining) // Guardamos el tiempo restante exacto
+                remainingTime: Math.max(0, remaining)
             });
         }
 
         function resumeTimer() {
             if (currentUser) {
-                // Al reanudar, solo cambiamos el estado y actualizamos la marca de tiempo
-                // para que el contador continúe desde el 'remainingTime' guardado.
                 activeUserRef.update({ 
                     isPaused: false,
                     lastUpdated: firebase.database.ServerValue.TIMESTAMP 
@@ -581,11 +584,11 @@
             }
         }
         
-        // --- NUEVA FUNCIÓN PARA EL PANEL DE RESUMEN ---
+        // --- FUNCIÓN PARA EL PANEL DE RESUMEN ---
         async function updateSummaryPanel(queueData = null, activeUserRemainingTime = -1) {
             const summaryPanel = document.getElementById('summaryPanel');
             const summaryStats = document.getElementById('summaryStats');
-            if (!currentUser) return;
+            if (!currentUser || !summaryPanel || !summaryStats) return;
             
             const finalQueueData = queueData || (await queueRef.once('value')).val();
             const sortedQueue = finalQueueData ? Object.values(finalQueueData).sort((a, b) => a.joinedAt - b.joinedAt) : [];
@@ -605,13 +608,13 @@
             let finalActiveTime = activeUserRemainingTime;
             if (finalActiveTime < 0) {
                 const activeUserSnap = await activeUserRef.once('value');
-                if (activeUserSnap.exists()) {
+                if (activeUserSnap.exists() && !activeUserSnap.val().isPaused) {
                     const activeUser = activeUserSnap.val();
                     const serverNow = Date.now() + serverTimeOffset;
                     const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
                     finalActiveTime = activeUser.remainingTime - elapsed;
                 } else {
-                    finalActiveTime = 0;
+                    finalActiveTime = activeUserSnap.val() ? activeUserSnap.val().remainingTime : 0;
                 }
             }
             finalActiveTime = Math.max(0, finalActiveTime);
