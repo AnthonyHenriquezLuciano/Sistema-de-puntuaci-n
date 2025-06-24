@@ -175,6 +175,8 @@
         let currentActiveUserId = null;
         let serverTimeOffset = 0;
 
+        // --- CONSTANTES (CORREGIDO) ---
+        const HEARTBEAT_INTERVAL_MS = 30000;
         const TURN_TIME_SECONDS = 15 * 60;
         const SYNC_INTERVAL_SECONDS = 5;
 
@@ -342,20 +344,24 @@
         }
         
         async function promoteNextUser() {
-            const nextUser = await findNextValidUserInQueue();
-            if (!nextUser) {
-                await activeUserRef.set(null); return;
-            }
-            const newActiveUserData = {
-                userId: nextUser.userId, email: nextUser.email, isPaused: false,
-                remainingTime: TURN_TIME_SECONDS,
-                lastUpdated: firebase.database.ServerValue.TIMESTAMP 
-            };
-            const { committed } = await activeUserRef.transaction(currentData => {
-                return currentData === null ? newActiveUserData : undefined;
-            });
-            if (committed) {
-                await queueRef.child(nextUser.key).remove();
+            try {
+                const nextUser = await findNextValidUserInQueue();
+                if (!nextUser) {
+                    await activeUserRef.set(null); return;
+                }
+                const newActiveUserData = {
+                    userId: nextUser.userId, email: nextUser.email, isPaused: false,
+                    remainingTime: TURN_TIME_SECONDS,
+                    lastUpdated: firebase.database.ServerValue.TIMESTAMP 
+                };
+                const { committed } = await activeUserRef.transaction(currentData => {
+                    return currentData === null ? newActiveUserData : undefined;
+                });
+                if (committed) {
+                    await queueRef.child(nextUser.key).remove();
+                }
+            } catch (error) {
+                console.error("Error al promover usuario:", error);
             }
         }
         
@@ -527,9 +533,13 @@
                     const activeUserSnap = await activeUserRef.once('value');
                     if (activeUserSnap.exists() && !activeUserSnap.val().isPaused) {
                         const activeUser = activeUserSnap.val();
-                        const serverNow = Date.now() + serverTimeOffset;
-                        const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
-                        finalActiveTime = activeUser.remainingTime - elapsed;
+                        if (activeUser.lastUpdated) {
+                            const serverNow = Date.now() + serverTimeOffset;
+                            const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
+                            finalActiveTime = activeUser.remainingTime - elapsed;
+                        } else {
+                           finalActiveTime = activeUser.remainingTime;
+                        }
                     } else {
                         finalActiveTime = activeUserSnap.val() ? activeUserSnap.val().remainingTime : 0;
                     }
