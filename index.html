@@ -5,99 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Turnos</title>
     <style>
-        /* --- Diseño Profesional Renovado --- */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-
-        :root {
-            --color-primary: #00529B; /* Azul primario */
-            --color-secondary: #00A3E0; /* Azul claro para acentos */
-            --color-background: #F0F4F8; /* Gris claro de fondo */
-            --color-surface: #FFFFFF; /* Blanco para tarjetas */
-            --color-text-primary: #212529; /* Texto oscuro */
-            --color-text-secondary: #6c757d; /* Texto gris */
-            --color-success: #28a745;
-            --color-danger: #dc3545;
-            --color-warning: #ffc107;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            --border-radius: 8px;
-        }
-
+        :root { --color-primary: #00529B; --color-secondary: #00A3E0; --color-background: #F0F4F8; --color-surface: #FFFFFF; --color-text-primary: #212529; --color-text-secondary: #6c757d; --color-success: #28a745; --color-danger: #dc3545; --color-warning: #ffc107; --shadow: 0 4px 12px rgba(0, 0, 0, 0.08); --border-radius: 8px; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--color-background);
-            color: var(--color-text-primary);
-            min-height: 100vh;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            color: var(--color-primary);
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-        
-        .header h1 svg {
-            width: 40px;
-            height: 40px;
-            fill: var(--color-primary);
-        }
-
-        .header p {
-            color: var(--color-text-secondary);
-            font-size: 1.1em;
-        }
-
-        .card {
-            background-color: var(--color-surface);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-
-        .user-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
+        body { font-family: 'Roboto', sans-serif; background-color: var(--color-background); color: var(--color-text-primary); min-height: 100vh; padding: 20px; display: flex; align-items: center; justify-content: center; }
+        .container { width: 100%; max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5em; color: var(--color-primary); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .header h1 svg { width: 40px; height: 40px; fill: var(--color-primary); }
+        .header p { color: var(--color-text-secondary); font-size: 1.1em; }
+        .card { background-color: var(--color-surface); border-radius: var(--border-radius); box-shadow: var(--shadow); padding: 25px; margin-bottom: 20px; }
+        .user-info { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
         .user-welcome { font-size: 1.1em; }
         .user-name { font-weight: 500; color: var(--color-primary); }
         .logout-btn { background-color: var(--color-danger); color: white; border: none; padding: 10px 20px; border-radius: var(--border-radius); cursor: pointer; font-size: 0.9em; font-weight: 500; transition: background-color 0.2s ease; }
-        .logout-btn:hover { background-color: #c82333; }
+        .logout-btn:hover:not(:disabled) { background-color: #c82333; }
+        .logout-btn:disabled { background-color: #6c757d; cursor: not-allowed; }
         .connection-status { padding: 5px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 500; }
         .connection-status.connected { background: #d4edda; color: #155724; }
         .connection-status.disconnected { background: #f8d7da; color: #721c24; }
-
         .queue-panel { display: grid; grid-template-columns: 300px 1fr; gap: 25px; }
         @media (max-width: 900px) { .queue-panel { grid-template-columns: 1fr; } }
-        
         .active-user-panel, .queue-table-container { border: 1px solid #dee2e6; border-radius: var(--border-radius); padding: 20px; }
         .active-user-panel h3, .queue-table-container h3, .summary-panel h3 { font-size: 1.5em; margin-bottom: 20px; border-bottom: 2px solid var(--color-primary); padding-bottom: 10px; }
         .active-user-panel { text-align: center; }
-        
         .timer-clock { position: relative; width: 150px; height: 150px; margin: 20px auto; }
         .timer-circle { fill: none; stroke: #ddd; stroke-width: 10; }
         .timer-progress { fill: none; stroke: var(--color-primary); stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.5s linear; }
@@ -106,7 +37,6 @@
         .timer-btn { background-color: var(--color-primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; }
         .timer-btn:hover { background-color: #003B6D; }
         .timer-btn:disabled { background: #6c757d; cursor: not-allowed; }
-
         .queue-table table { width: 100%; border-collapse: collapse; }
         .queue-table th, .queue-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
         .queue-table th { background-color: var(--color-primary); color: white; font-weight: 500; }
@@ -117,14 +47,11 @@
         .join-queue-btn:disabled { background-color: #6c757d; cursor: not-allowed; }
         .leave-queue-btn { background-color: var(--color-danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: background-color 0.2s ease; }
         .leave-queue-btn:hover { background-color: #c82333; }
-
-        /* --- Estilos para el panel de resumen --- */
-        .summary-panel { display: none; } /* Oculto por defecto */
+        .summary-panel { display: none; }
         .summary-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; text-align: center; }
         .stat-item { background: var(--color-background); padding: 15px; border-radius: var(--border-radius); }
         .stat-item .label { font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 5px; display: block; }
         .stat-item .value { font-size: 1.8em; font-weight: 700; color: var(--color-primary); }
-
         .login-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; padding: 20px;}
         .login-content { background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); width: 100%; max-width: 450px; box-shadow: var(--shadow); text-align: center; }
         .login-content h2 { margin-bottom: 10px; color: var(--color-primary); font-size: 1.8em; }
@@ -138,7 +65,6 @@
         .forgot-password { font-size: 0.9em; margin-top: 15px; }
         .forgot-password a { color: var(--color-primary); text-decoration: none; }
         .forgot-password a:hover { text-decoration: underline; }
-        
         .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; vertical-align: middle;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .notification { position: fixed; top: 20px; right: 20px; color: white; padding: 15px 25px; border-radius: var(--border-radius); box-shadow: var(--shadow); transform: translateX(400px); opacity: 0; transition: all 0.5s ease; z-index: 1000; }
@@ -181,7 +107,7 @@
                 <div class="connection-status connected" id="connectionStatus">🟢 Conectado</div>
             </div>
             <div class="current-time" id="currentTime"></div>
-            <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+            <button class="logout-btn" id="logoutBtn" onclick="logout()">Cerrar Sesión</button>
         </div>
         
         <div class="card summary-panel" id="summaryPanel">
@@ -272,7 +198,7 @@
                 activeUserRef = database.ref(ACTIVE_USER_PATH);
                 
                 database.ref('/.info/serverTimeOffset').on('value', (snap) => {
-                    serverTimeOffset = snap.val();
+                    serverTimeOffset = snap.val() || 0;
                 });
 
                 startPageClock();
@@ -302,7 +228,10 @@
             document.getElementById('loginButton').onclick = handleLoginClick;
             document.getElementById('passwordInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLoginClick(); });
         }
-
+        
+        /**
+         * LÓGICA DE LOGIN MEJORADA CON CONTROL DE SESIÓN ÚNICA ESTRICTO
+         */
         async function handleLoginClick() {
             if (isLoggingIn) return;
             const email = document.getElementById('emailInput').value.trim();
@@ -313,14 +242,24 @@
             const loginButtonText = document.getElementById('loginButtonText');
             isLoggingIn = true;
             loginButton.disabled = true;
-            loginButtonText.innerHTML = '<span class="loading-spinner"></span> Iniciando...';
+            loginButtonText.innerHTML = '<span class="loading-spinner"></span> Verificando...';
             showError(null);
 
             try {
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                const user = userCredential.user;
+                // Primero, obtenemos el UID sin iniciar sesión para verificar la sesión.
+                const tempUser = await auth.signInWithEmailAndPassword(email, password);
+                const user = tempUser.user;
                 
+                // Verificación de sesión activa
                 const sessionRef = activeSessionsRef.child(user.uid);
+                const sessionSnap = await sessionRef.once('value');
+                if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
+                    // Si la sesión existe y está activa, rechazamos el nuevo inicio de sesión.
+                    await auth.signOut(); // Cerramos la sesión temporal que abrimos.
+                    throw new Error("Ya tienes una sesión activa en otro dispositivo o pestaña.");
+                }
+
+                // Si no hay sesión activa, procedemos a establecer la nueva.
                 await sessionRef.set({
                     userId: user.uid, email: user.email, 
                     loginTime: firebase.database.ServerValue.TIMESTAMP,
@@ -348,7 +287,10 @@
         }
 
         async function logout() {
-            if (!currentUser) return;
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (!currentUser || logoutBtn.disabled) return;
+
+            logoutBtn.disabled = true; // Desactivar para evitar doble clic
             try {
                 if(currentUser.uid) {
                     await activeSessionsRef.child(currentUser.uid).update({ status: 'logged_out' });
@@ -356,6 +298,7 @@
                 await auth.signOut();
             } catch (error) { 
                 console.error('Error en logout:', error);
+                logoutBtn.disabled = false; // Reactivar si hay error
             } finally {
                 cleanupSessionState();
             }
@@ -369,13 +312,15 @@
             document.getElementById('emailInput').value = '';
             document.getElementById('passwordInput').value = '';
             showError(null);
+            const logoutBtn = document.getElementById('logoutBtn');
+            if(logoutBtn) logoutBtn.disabled = false;
         }
 
         // --- LÓGICA DE COLA Y TURNOS ---
         function setupQueueSystem() {
             document.getElementById('joinQueueBtn').onclick = joinQueue;
             setupQueueListeners();
-            activateNextInQueue();
+            activateNextInQueue(); // Intenta activar la cola al iniciar
         }
         
         async function joinQueue() {
@@ -417,26 +362,35 @@
         }
         
         /**
-         * Lógica de avance de turno, CORREGIDA Y ROBUSTA.
+         * LÓGICA DE AVANCE DE TURNO ATÓMICA Y ROBUSTA
          */
         async function promoteNextUser() {
             const nextUser = await findNextValidUserInQueue();
+            if (!nextUser) {
+                await activeUserRef.set(null); 
+                return;
+            }
+            
+            const newActiveUserData = {
+                userId: nextUser.userId,
+                email: nextUser.email,
+                isPaused: false,
+                remainingTime: TURN_TIME_SECONDS,
+                lastUpdated: firebase.database.ServerValue.TIMESTAMP 
+            };
 
-            if (nextUser) {
-                console.log(`Promoviendo a ${nextUser.email} al turno activo.`);
-                const newActiveUserData = {
-                    userId: nextUser.userId,
-                    email: nextUser.email,
-                    isPaused: false,
-                    remainingTime: TURN_TIME_SECONDS,
-                    lastUpdated: firebase.database.ServerValue.TIMESTAMP 
-                };
-                await activeUserRef.set(newActiveUserData);
-                // INMEDIATAMENTE después de promoverlo, lo quitamos de la cola de espera.
+            // Usamos una transacción para garantizar que solo un cliente pueda tomar el turno.
+            const { committed } = await activeUserRef.transaction(currentData => {
+                // Solo procedemos si el puesto está vacío (null).
+                return currentData === null ? newActiveUserData : undefined;
+            });
+
+            if (committed) {
+                // Si nuestra transacción tuvo éxito, eliminamos al usuario de la cola.
+                console.log(`Promoción exitosa de ${nextUser.email}.`);
                 await queueRef.child(nextUser.key).remove();
             } else {
-                console.log("No hay nadie más en la cola. Limpiando el turno activo.");
-                await activeUserRef.set(null); 
+                console.log("El turno ya fue tomado por otro cliente (condición de carrera evitada).");
             }
         }
         
@@ -464,19 +418,18 @@
                 const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
                 
                 if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
-                    return userInQueue; // Devuelve el primer usuario válido y conectado.
+                    return userInQueue;
                 }
             }
-            return null; // No hay nadie válido en la cola.
+            return null;
         }
         
         // --- LISTENERS Y TEMPORIZADORES ---
         function setupQueueListeners() {
             activeUserRef.on('value', handleActiveUserChange);
             queueRef.on('value', (snap) => {
-                const queueData = snap.val();
-                renderQueue(queueData);
-                updateSummaryPanel(queueData);
+                renderQueue(snap.val());
+                updateSummaryPanel(snap.val());
             });
         }
 
@@ -507,7 +460,7 @@
 
         function startClientTimer(activeUserData) {
             if (!activeUserData.lastUpdated) {
-                setTimeout(() => activeUserRef.once('value', snap => handleActiveUserChange(snap)), 500);
+                setTimeout(() => activeUserRef.once('value').then(handleActiveUserChange), 500);
                 return;
             }
             
@@ -559,7 +512,6 @@
             }, SYNC_INTERVAL_SECONDS * 1000);
         }
         
-        // --- LÓGICA DE PAUSA/REANUDAR (CORREGIDA) ---
         async function pauseTimer() {
             if (!currentUser) return;
             const snap = await activeUserRef.once('value');
@@ -584,7 +536,6 @@
             }
         }
         
-        // --- FUNCIÓN PARA EL PANEL DE RESUMEN ---
         async function updateSummaryPanel(queueData = null, activeUserRemainingTime = -1) {
             const summaryPanel = document.getElementById('summaryPanel');
             const summaryStats = document.getElementById('summaryStats');
@@ -592,7 +543,6 @@
             
             const finalQueueData = queueData || (await queueRef.once('value')).val();
             const sortedQueue = finalQueueData ? Object.values(finalQueueData).sort((a, b) => a.joinedAt - b.joinedAt) : [];
-            
             const myQueueIndex = sortedQueue.findIndex(u => u.userId === currentUser.uid);
 
             if (myQueueIndex === -1) {
@@ -640,14 +590,13 @@
             `;
         }
 
-        // --- Resto de funciones auxiliares ---
         function stopAllTimers() { clearInterval(globalTimerInterval); clearInterval(syncInterval); }
         function stopAllTimersAndListeners() { stopAllTimers(); stopHeartbeat(); if(activeUserRef) activeUserRef.off('value', handleActiveUserChange); if(queueRef) queueRef.off('value'); if(connectedRef) connectedRef.off('value'); }
         async function leaveQueue(key) { if (!currentUser || !key) return; try { await queueRef.child(key).remove(); showNotification('Has salido de la cola.', 'success');} catch(e) { console.error(e) }}
         async function handleForgotPassword(e) { e.preventDefault(); const email = document.getElementById('emailInput').value.trim(); if (!email) { showError("Por favor, ingresa tu correo para restablecer la contraseña."); return; } try { await auth.sendPasswordResetEmail(email); showNotification(`Se ha enviado un enlace a ${email}`, 'success'); showError(null); } catch (error) { showError(error.message); }}
         function renderActiveUser(data) { const activeUserInfo = document.getElementById('activeUserInfo'); const timerControls = document.getElementById('timerControls'); if (!activeUserInfo || !timerControls) return; if (!data) { activeUserInfo.innerHTML = 'Nadie activo'; timerControls.innerHTML = ''; updateTimerDisplayUI(TURN_TIME_SECONDS); return; } activeUserInfo.innerHTML = `<b>${data.email}</b>`; if (data.userId === currentUser?.uid) { timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`; document.getElementById('pauseTimerBtn').onclick = pauseTimer; document.getElementById('resumeTimerBtn').onclick = resumeTimer; } else { timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : ''; }}
         function renderQueue(queueData) { const queueListBody = document.querySelector('#queueListBody'); if(!queueListBody) return; queueListBody.innerHTML = ''; if (!queueData) { queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>'; return; } const sortedQueue = Object.values(queueData).sort((a, b) => a.joinedAt - b.joinedAt); if (sortedQueue.length === 0) { queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>'; return; } sortedQueue.forEach((q, index) => { const tr = document.createElement('tr'); if (q.userId === currentUser?.uid) tr.classList.add('current-user'); tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>${q.userId === currentUser?.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">Salir</button>` : 'En espera'}</td>`; queueListBody.appendChild(tr); });}
-        function updateTimerDisplayUI(seconds) { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); if(!timerText || !timerProgress) return; const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; const progress = remaining / TURN_TIME_SECONDS; timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);}
+        function updateTimerDisplayUI(seconds) { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); if(!timerText || !timerProgress) return; const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0; timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);}
         function setupConnectionListener() { connectedRef.on('value', (snap) => { isConnected = snap.val() === true; updateConnectionStatus(); if(isConnected && currentUser) { activateNextInQueue(); }}); }
         function updateConnectionStatus() { const el=document.getElementById('connectionStatus'); if(el) { el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado'; el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`; }}
         function startHeartbeat() { if (heartbeatInterval) clearInterval(heartbeatInterval); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, HEARTBEAT_INTERVAL_MS); }
