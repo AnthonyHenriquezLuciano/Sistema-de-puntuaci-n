@@ -192,13 +192,10 @@
                 database = firebase.database();
                 auth = firebase.auth();
                 
-                // --- NUEVO CONTROLADOR CENTRAL DE AUTENTICACIÓN ---
                 auth.onAuthStateChanged(user => {
                     if (user) {
-                        // Un usuario ha iniciado sesión o el estado ha cambiado a "logueado"
                         onUserLoggedIn(user);
                     } else {
-                        // El usuario ha cerrado sesión
                         onUserLoggedOut();
                     }
                 });
@@ -220,41 +217,40 @@
                 showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
             }
         }
-
-        // --- NUEVAS FUNCIONES DE CONTROL DE ESTADO ---
+        
         async function onUserLoggedIn(user) {
-            if (currentUser && currentUser.uid === user.uid) {
-                return; // Ya estamos configurados para este usuario
-            }
-            console.log("Estado de Auth cambiado a: ", user.email);
+            if (currentUser && currentUser.uid === user.uid) return;
             
-            // Limpiamos cualquier estado anterior
             stopAllTimersAndListeners();
-            
             currentUser = user;
 
-            const sessionRef = activeSessionsRef.child(user.uid);
-            await sessionRef.set({
-                userId: user.uid, email: user.email, 
-                loginTime: firebase.database.ServerValue.TIMESTAMP,
-                status: 'active'
-            });
-            await sessionRef.onDisconnect().update({ status: 'disconnected' });
+            try {
+                const sessionRef = activeSessionsRef.child(user.uid);
+                await sessionRef.set({
+                    userId: user.uid, email: user.email, 
+                    loginTime: firebase.database.ServerValue.TIMESTAMP,
+                    status: 'active'
+                });
+                await sessionRef.onDisconnect().update({ status: 'disconnected' });
 
-            document.getElementById('userName').textContent = currentUser.email;
-            document.getElementById('loginModal').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
+                document.getElementById('userName').textContent = currentUser.email;
+                document.getElementById('loginModal').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'block';
 
-            setupQueueSystem();
-            startHeartbeat();
+                setupQueueSystem();
+                startHeartbeat();
+            } catch (error) {
+                console.error("Error al configurar la sesión del usuario:", error);
+                showError("No se pudo configurar tu sesión. Inténtalo de nuevo.");
+                await auth.signOut();
+            }
         }
 
         function onUserLoggedOut() {
-            console.log("Estado de Auth cambiado a: Desconectado");
             cleanupSessionState();
         }
         
-        // --- LÓGICA DE SESIÓN (SIMPLIFICADA) ---
+        // --- LÓGICA DE SESIÓN ---
         async function handleLoginClick() {
             if (isLoggingIn) return;
             const email = document.getElementById('emailInput').value.trim();
@@ -269,12 +265,9 @@
             showError(null);
 
             try {
-                // La única responsabilidad de esta función ahora es intentar iniciar sesión.
-                // El listener onAuthStateChanged se encargará del resto.
                 await auth.signInWithEmailAndPassword(email, password);
             } catch (error) {
                 showError(error.message);
-            } finally {
                 isLoggingIn = false;
                 loginButton.disabled = false;
                 loginButtonText.textContent = 'Iniciar Sesión';
@@ -289,7 +282,6 @@
                 if(currentUser.uid) {
                     await activeSessionsRef.child(currentUser.uid).update({ status: 'logged_out' });
                 }
-                // Al llamar a signOut(), se activará onAuthStateChanged, que llamará a onUserLoggedOut
                 await auth.signOut();
             } catch (error) { 
                 console.error('Error en logout:', error);
@@ -320,7 +312,6 @@
             if (!isConnected || !currentUser) return;
             const joinBtn = document.getElementById('joinQueueBtn');
             joinBtn.disabled = true;
-
             try {
                 const activeUserSnap = await activeUserRef.once('value');
                 if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
@@ -338,13 +329,13 @@
                     joinedAt: firebase.database.ServerValue.TIMESTAMP
                 });
                 showNotification('Te uniste a la cola.', 'success');
-
                 const currentActiveUser = (await activeUserRef.once('value')).val();
                 if (!currentActiveUser) {
                     activateNextInQueue();
                 }
             } catch (error) { 
                 showNotification(`Error al unirse: ${error.message}`, 'error'); 
+                console.error("Error en joinQueue:", error);
             } finally {
                 joinBtn.disabled = false;
             }
@@ -355,7 +346,6 @@
             if (!nextUser) {
                 await activeUserRef.set(null); return;
             }
-            
             const newActiveUserData = {
                 userId: nextUser.userId, email: nextUser.email, isPaused: false,
                 remainingTime: TURN_TIME_SECONDS,
@@ -370,30 +360,40 @@
         }
         
         async function activateNextInQueue() {
-            const snap = await activeUserRef.once('value');
-            if (snap.exists()) {
-                const activeUser = snap.val();
-                const sessionSnap = await activeSessionsRef.child(activeUser.userId).once('value');
-                if(!sessionSnap.exists() || sessionSnap.val().status !== 'active') {
+            try {
+                const snap = await activeUserRef.once('value');
+                if (snap.exists()) {
+                    const activeUser = snap.val();
+                    const sessionSnap = await activeSessionsRef.child(activeUser.userId).once('value');
+                    if(!sessionSnap.exists() || sessionSnap.val().status !== 'active') {
+                        console.log(`Limpiando turno fantasma de ${activeUser.email}`);
+                        await promoteNextUser();
+                    }
+                } else {
                     await promoteNextUser();
                 }
-            } else {
-                await promoteNextUser();
+            } catch(error) {
+                console.error("Error al activar siguiente en cola:", error);
             }
         }
         
         async function findNextValidUserInQueue() {
-            const queueSnap = await queueRef.orderByChild('joinedAt').once('value');
-            if (!queueSnap.exists()) return null;
-            const queueData = queueSnap.val();
-            for (const key in queueData) {
-                const userInQueue = { key, ...queueData[key] };
-                const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
-                if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
-                    return userInQueue;
+            try {
+                const queueSnap = await queueRef.orderByChild('joinedAt').once('value');
+                if (!queueSnap.exists()) return null;
+                const queueData = queueSnap.val();
+                for (const key in queueData) {
+                    const userInQueue = { key, ...queueData[key] };
+                    const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
+                    if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
+                        return userInQueue;
+                    }
                 }
+                return null;
+            } catch(error) {
+                console.error("Error al buscar siguiente usuario válido:", error);
+                return null;
             }
-            return null;
         }
         
         // --- LISTENERS Y TEMPORIZADORES ---
@@ -409,18 +409,15 @@
             if (!currentUser) return;
             const activeUserData = snap.val();
             const newActiveUserId = activeUserData ? activeUserData.userId : null;
-
             renderActiveUser(activeUserData);
             updateSummaryPanel();
             stopAllTimers();
-
             if (activeUserData && !activeUserData.isPaused) {
                 startClientTimer(activeUserData);
                 if (activeUserData.userId === currentUser.uid) {
                     startAuthoritativeSync();
                 }
             }
-
             if (newActiveUserId !== currentActiveUserId) {
                 currentActiveUserId = newActiveUserId;
                 if (newActiveUserId === currentUser.uid) {
@@ -480,23 +477,31 @@
         
         async function pauseTimer() {
             if (!currentUser) return;
-            const snap = await activeUserRef.once('value');
-            if(!snap.exists() || snap.val().userId !== currentUser.uid) return;
-            const serverNow = Date.now() + serverTimeOffset;
-            const elapsed = Math.floor((serverNow - snap.val().lastUpdated) / 1000);
-            const remaining = snap.val().remainingTime - elapsed;
-            activeUserRef.update({ 
-                isPaused: true,
-                remainingTime: Math.max(0, remaining)
-            });
+            try {
+                const snap = await activeUserRef.once('value');
+                if(!snap.exists() || snap.val().userId !== currentUser.uid) return;
+                const serverNow = Date.now() + serverTimeOffset;
+                const elapsed = Math.floor((serverNow - snap.val().lastUpdated) / 1000);
+                const remaining = snap.val().remainingTime - elapsed;
+                await activeUserRef.update({ 
+                    isPaused: true,
+                    remainingTime: Math.max(0, remaining)
+                });
+            } catch (error) {
+                console.error("Error al pausar:", error);
+            }
         }
 
-        function resumeTimer() {
+        async function resumeTimer() {
             if (currentUser) {
-                activeUserRef.update({ 
-                    isPaused: false,
-                    lastUpdated: firebase.database.ServerValue.TIMESTAMP 
-                });
+                try {
+                    await activeUserRef.update({ 
+                        isPaused: false,
+                        lastUpdated: firebase.database.ServerValue.TIMESTAMP 
+                    });
+                } catch (error) {
+                    console.error("Error al reanudar:", error);
+                }
             }
         }
         
@@ -504,47 +509,51 @@
             const summaryPanel = document.getElementById('summaryPanel');
             const summaryStats = document.getElementById('summaryStats');
             if (!currentUser || !summaryPanel || !summaryStats) return;
-            const finalQueueData = queueData || (await queueRef.once('value').then(s => s.val()));
-            const sortedQueue = finalQueueData ? Object.values(finalQueueData).sort((a, b) => a.joinedAt - b.joinedAt) : [];
-            const myQueueIndex = sortedQueue.findIndex(u => u.userId === currentUser.uid);
+            try {
+                const finalQueueData = queueData || (await queueRef.once('value').then(s => s.val()));
+                const sortedQueue = finalQueueData ? Object.values(finalQueueData).sort((a, b) => a.joinedAt - b.joinedAt) : [];
+                const myQueueIndex = sortedQueue.findIndex(u => u.userId === currentUser.uid);
 
-            if (myQueueIndex === -1) {
-                summaryPanel.style.display = 'none'; return;
-            }
-            summaryPanel.style.display = 'block';
-            
-            const myPosition = myQueueIndex + 1;
-            const usersAhead = myQueueIndex;
-
-            let finalActiveTime = activeUserRemainingTime;
-            if (finalActiveTime < 0) {
-                const activeUserSnap = await activeUserRef.once('value');
-                if (activeUserSnap.exists() && !activeUserSnap.val().isPaused) {
-                    const activeUser = activeUserSnap.val();
-                    const serverNow = Date.now() + serverTimeOffset;
-                    const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
-                    finalActiveTime = activeUser.remainingTime - elapsed;
-                } else {
-                    finalActiveTime = activeUserSnap.val() ? activeUserSnap.val().remainingTime : 0;
+                if (myQueueIndex === -1) {
+                    summaryPanel.style.display = 'none'; return;
                 }
-            }
-            finalActiveTime = Math.max(0, finalActiveTime);
+                summaryPanel.style.display = 'block';
+                
+                const myPosition = myQueueIndex + 1;
+                const usersAhead = myQueueIndex;
 
-            const estimatedWaitSeconds = finalActiveTime + (usersAhead * TURN_TIME_SECONDS);
-            const waitMinutes = Math.floor(estimatedWaitSeconds / 60);
-            const waitSeconds = estimatedWaitSeconds % 60;
-            const formattedWaitTime = `${waitMinutes.toString().padStart(2, '0')}:${waitSeconds.toString().padStart(2, '0')}`;
-            
-            summaryStats.innerHTML = `
-                <div class="stat-item"><span class="label">Tu Posición</span><span class="value">${myPosition}</span></div>
-                <div class="stat-item"><span class="label">Usuarios Delante</span><span class="value">${usersAhead}</span></div>
-                <div class="stat-item"><span class="label">Tiempo Estimado</span><span class="value">${formattedWaitTime}</span></div>
-            `;
+                let finalActiveTime = activeUserRemainingTime;
+                if (finalActiveTime < 0) {
+                    const activeUserSnap = await activeUserRef.once('value');
+                    if (activeUserSnap.exists() && !activeUserSnap.val().isPaused) {
+                        const activeUser = activeUserSnap.val();
+                        const serverNow = Date.now() + serverTimeOffset;
+                        const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
+                        finalActiveTime = activeUser.remainingTime - elapsed;
+                    } else {
+                        finalActiveTime = activeUserSnap.val() ? activeUserSnap.val().remainingTime : 0;
+                    }
+                }
+                finalActiveTime = Math.max(0, finalActiveTime);
+
+                const estimatedWaitSeconds = finalActiveTime + (usersAhead * TURN_TIME_SECONDS);
+                const waitMinutes = Math.floor(estimatedWaitSeconds / 60);
+                const waitSeconds = estimatedWaitSeconds % 60;
+                const formattedWaitTime = `${waitMinutes.toString().padStart(2, '0')}:${waitSeconds.toString().padStart(2, '0')}`;
+                
+                summaryStats.innerHTML = `
+                    <div class="stat-item"><span class="label">Tu Posición</span><span class="value">${myPosition}</span></div>
+                    <div class="stat-item"><span class="label">Usuarios Delante</span><span class="value">${usersAhead}</span></div>
+                    <div class="stat-item"><span class="label">Tiempo Estimado</span><span class="value">${formattedWaitTime}</span></div>
+                `;
+            } catch(error) {
+                console.error("Error actualizando el panel de resumen:", error);
+            }
         }
         
         function stopAllTimers() { clearInterval(globalTimerInterval); clearInterval(syncInterval); clearInterval(heartbeatInterval); }
         function stopAllTimersAndListeners() { stopAllTimers(); if(activeUserRef) activeUserRef.off(); if(queueRef) queueRef.off(); if(connectedRef) connectedRef.off(); }
-        async function leaveQueue(key) { if (!currentUser || !key) return; try { await queueRef.child(key).remove(); showNotification('Has salido de la cola.', 'success');} catch(e) { console.error(e) }}
+        async function leaveQueue(key) { if (!currentUser || !key) return; try { await queueRef.child(key).remove(); showNotification('Has salido de la cola.', 'success');} catch(e) { console.error("Error al salir de la cola:", e); }}
         async function handleForgotPassword(e) { e.preventDefault(); const email = document.getElementById('emailInput').value.trim(); if (!email) { showError("Ingresa tu correo."); return; } try { await auth.sendPasswordResetEmail(email); showNotification(`Enlace enviado a ${email}`, 'success'); showError(null); } catch (error) { showError(error.message); }}
         function renderActiveUser(data) { const activeUserInfo = document.getElementById('activeUserInfo'); const timerControls = document.getElementById('timerControls'); if (!activeUserInfo || !timerControls) return; if (!data) { activeUserInfo.innerHTML = 'Nadie activo'; timerControls.innerHTML = ''; updateTimerDisplayUI(TURN_TIME_SECONDS); return; } activeUserInfo.innerHTML = `<b>${data.email}</b>`; if (currentUser && data.userId === currentUser.uid) { timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`; document.getElementById('pauseTimerBtn').onclick = pauseTimer; document.getElementById('resumeTimerBtn').onclick = resumeTimer; } else { timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : ''; }}
         function renderQueue(queueData) { const queueListBody = document.querySelector('#queueListBody'); if(!queueListBody) return; queueListBody.innerHTML = ''; if (!queueData) { queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>'; return; } const sortedQueue = Object.values(queueData).sort((a, b) => a.joinedAt - b.joinedAt); if (sortedQueue.length === 0) { queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>'; return; } sortedQueue.forEach((q, index) => { const tr = document.createElement('tr'); if (currentUser && q.userId === currentUser.uid) tr.classList.add('current-user'); tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>${currentUser && q.userId === currentUser.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">Salir</button>` : 'En espera'}</td>`; queueListBody.appendChild(tr); });}
