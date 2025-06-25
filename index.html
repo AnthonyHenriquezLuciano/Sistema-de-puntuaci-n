@@ -222,7 +222,6 @@
         }
 
         async function onUserLoggedIn(user) {
-            console.log("Usuario autenticado:", user.email);
             stopAllTimersAndListeners();
             currentUser = user;
 
@@ -248,7 +247,6 @@
         }
 
         function onUserLoggedOut() {
-            console.log("Usuario desconectado.");
             cleanupSessionState();
         }
         
@@ -379,7 +377,6 @@
                     const activeUser = snap.val();
                     const sessionSnap = await activeSessionsRef.child(activeUser.userId).once('value');
                     if(!sessionSnap.exists() || sessionSnap.val().status !== 'active') {
-                        console.log(`Limpiando turno fantasma de ${activeUser.email}`);
                         await promoteNextUser();
                     }
                 } else {
@@ -577,7 +574,7 @@
         function updateTimerDisplayUI(seconds) { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); if(!timerText || !timerProgress) return; const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0; timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);}
         function setupConnectionListener() { connectedRef.on('value', (snap) => { isConnected = snap.val() === true; updateConnectionStatus(); if(isConnected && currentUser) { activateNextInQueue(); }}); }
         function updateConnectionStatus() { const el=document.getElementById('connectionStatus'); if(el) { el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado'; el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`; }}
-        function startHeartbeat() { stopHeartbeat(); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, HEARTBEAT_INTERVAL_MS); }
+        function startHeartbeat() { stopHeartbeat(); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, 30000); }
         function stopHeartbeat() { clearInterval(heartbeatInterval); }
         function startPageClock() { if (pageClockInterval) clearInterval(pageClockInterval); pageClockInterval = setInterval(updateCurrentTime, 1000); }
         function updateCurrentTime() { const el = document.getElementById('currentTime'); if (el) { el.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' }); }}
