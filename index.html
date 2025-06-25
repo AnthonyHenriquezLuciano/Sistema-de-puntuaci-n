@@ -170,13 +170,11 @@
         // --- Variables Globales ---
         let currentUser = null;
         let heartbeatInterval = null, globalTimerInterval = null, syncInterval = null, pageClockInterval = null, titleNotificationInterval = null;
-        let isConnected = false, isLoggingIn = false;
+        let isConnected = false;
         let originalTitle = document.title;
         let currentActiveUserId = null;
         let serverTimeOffset = 0;
 
-        // --- CONSTANTES (CORREGIDO) ---
-        const HEARTBEAT_INTERVAL_MS = 30000;
         const TURN_TIME_SECONDS = 15 * 60;
         const SYNC_INTERVAL_SECONDS = 5;
 
@@ -194,25 +192,18 @@
                 database = firebase.database();
                 auth = firebase.auth();
                 
-                auth.onAuthStateChanged(user => {
-                    if (user) {
-                        onUserLoggedIn(user);
-                    } else {
-                        onUserLoggedOut();
-                    }
-                });
-
                 activeSessionsRef = database.ref(ACTIVE_SESSIONS_PATH);
                 connectedRef = database.ref('.info/connected');
                 queueRef = database.ref(QUEUE_PATH);
                 activeUserRef = database.ref(ACTIVE_USER_PATH);
                 
+                auth.onAuthStateChanged(auth_onAuthStateChanged);
+
                 database.ref('/.info/serverTimeOffset').on('value', (snap) => {
                     serverTimeOffset = snap.val() || 0;
                 });
 
                 startPageClock();
-                setupConnectionListener();
                 document.getElementById('loginButton').onclick = handleLoginClick;
                 document.getElementById('passwordInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLoginClick(); });
             } catch (error) {
@@ -220,9 +211,18 @@
             }
         }
         
+        // --- CONTROLADORES DE ESTADO ---
+        async function auth_onAuthStateChanged(user) {
+            if (user) {
+                if (currentUser && currentUser.uid === user.uid) return;
+                await onUserLoggedIn(user);
+            } else {
+                onUserLoggedOut();
+            }
+        }
+
         async function onUserLoggedIn(user) {
-            if (currentUser && currentUser.uid === user.uid) return;
-            
+            console.log("Usuario autenticado:", user.email);
             stopAllTimersAndListeners();
             currentUser = user;
 
@@ -239,8 +239,7 @@
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
 
-                setupQueueSystem();
-                startHeartbeat();
+                setupAppForUser();
             } catch (error) {
                 console.error("Error al configurar la sesión del usuario:", error);
                 showError("No se pudo configurar tu sesión. Inténtalo de nuevo.");
@@ -249,11 +248,20 @@
         }
 
         function onUserLoggedOut() {
+            console.log("Usuario desconectado.");
             cleanupSessionState();
         }
         
+        function setupAppForUser() {
+            setupConnectionListener();
+            setupQueueListeners();
+            startHeartbeat();
+            activateNextInQueue();
+        }
+
         // --- LÓGICA DE SESIÓN ---
         async function handleLoginClick() {
+            let isLoggingIn = false;
             if (isLoggingIn) return;
             const email = document.getElementById('emailInput').value.trim();
             const password = document.getElementById('passwordInput').value;
@@ -270,6 +278,7 @@
                 await auth.signInWithEmailAndPassword(email, password);
             } catch (error) {
                 showError(error.message);
+            } finally {
                 isLoggingIn = false;
                 loginButton.disabled = false;
                 loginButtonText.textContent = 'Iniciar Sesión';
@@ -293,7 +302,7 @@
 
         function cleanupSessionState() {
             stopAllTimersAndListeners();
-            currentUser = null; currentActiveUserId = null; isLoggingIn = false;
+            currentUser = null; currentActiveUserId = null;
             document.getElementById('mainContainer').style.display = 'none';
             document.getElementById('loginModal').style.display = 'flex';
             document.getElementById('emailInput').value = '';
@@ -306,8 +315,6 @@
         // --- LÓGICA DE COLA Y TURNOS ---
         function setupQueueSystem() {
             document.getElementById('joinQueueBtn').onclick = joinQueue;
-            setupQueueListeners();
-            activateNextInQueue();
         }
         
         async function joinQueue() {
@@ -561,8 +568,8 @@
             }
         }
         
-        function stopAllTimers() { clearInterval(globalTimerInterval); clearInterval(syncInterval); clearInterval(heartbeatInterval); }
-        function stopAllTimersAndListeners() { stopAllTimers(); if(activeUserRef) activeUserRef.off(); if(queueRef) queueRef.off(); if(connectedRef) connectedRef.off(); }
+        function stopAllTimers() { clearInterval(globalTimerInterval); clearInterval(syncInterval); }
+        function stopAllTimersAndListeners() { stopAllTimers(); clearInterval(heartbeatInterval); if(activeUserRef) activeUserRef.off(); if(queueRef) queueRef.off(); if(connectedRef) connectedRef.off(); }
         async function leaveQueue(key) { if (!currentUser || !key) return; try { await queueRef.child(key).remove(); showNotification('Has salido de la cola.', 'success');} catch(e) { console.error("Error al salir de la cola:", e); }}
         async function handleForgotPassword(e) { e.preventDefault(); const email = document.getElementById('emailInput').value.trim(); if (!email) { showError("Ingresa tu correo."); return; } try { await auth.sendPasswordResetEmail(email); showNotification(`Enlace enviado a ${email}`, 'success'); showError(null); } catch (error) { showError(error.message); }}
         function renderActiveUser(data) { const activeUserInfo = document.getElementById('activeUserInfo'); const timerControls = document.getElementById('timerControls'); if (!activeUserInfo || !timerControls) return; if (!data) { activeUserInfo.innerHTML = 'Nadie activo'; timerControls.innerHTML = ''; updateTimerDisplayUI(TURN_TIME_SECONDS); return; } activeUserInfo.innerHTML = `<b>${data.email}</b>`; if (currentUser && data.userId === currentUser.uid) { timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`; document.getElementById('pauseTimerBtn').onclick = pauseTimer; document.getElementById('resumeTimerBtn').onclick = resumeTimer; } else { timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : ''; }}
@@ -570,7 +577,8 @@
         function updateTimerDisplayUI(seconds) { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); if(!timerText || !timerProgress) return; const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0; timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);}
         function setupConnectionListener() { connectedRef.on('value', (snap) => { isConnected = snap.val() === true; updateConnectionStatus(); if(isConnected && currentUser) { activateNextInQueue(); }}); }
         function updateConnectionStatus() { const el=document.getElementById('connectionStatus'); if(el) { el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado'; el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`; }}
-        function startHeartbeat() { if (heartbeatInterval) clearInterval(heartbeatInterval); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, HEARTBEAT_INTERVAL_MS); }
+        function startHeartbeat() { stopHeartbeat(); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, HEARTBEAT_INTERVAL_MS); }
+        function stopHeartbeat() { clearInterval(heartbeatInterval); }
         function startPageClock() { if (pageClockInterval) clearInterval(pageClockInterval); pageClockInterval = setInterval(updateCurrentTime, 1000); }
         function updateCurrentTime() { const el = document.getElementById('currentTime'); if (el) { el.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' }); }}
         function showError(m) { const el=document.getElementById('userError'); if(el) { el.style.display=m?'block':'none'; el.textContent=m; }}
