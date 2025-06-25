@@ -4,779 +4,618 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Turnos</title>
+    <!-- ...Tus estilos aquí... -->
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-        :root { --color-primary: #00529B; --color-secondary: #00A3E0; --color-background: #F0F4F8; --color-surface: #FFFFFF; --color-text-primary: #212529; --color-text-secondary: #6c757d; --color-success: #28a745; --color-danger: #dc3545; --color-warning: #ffc107; --shadow: 0 4px 12px rgba(0, 0, 0, 0.08); --border-radius: 8px; }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Roboto', sans-serif; background-color: var(--color-background); color: var(--color-text-primary); min-height: 100vh; padding: 20px; display: flex; align-items: center; justify-content: center; }
-        .container { width: 100%; max-width: 1200px; margin: 0 auto; }
-        .header { text-align: center; margin-bottom: 30px; }
-        .header h1 { font-size: 2.5em; color: var(--color-primary); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 15px; }
-        .header h1 svg { width: 40px; height: 40px; fill: var(--color-primary); }
-        .header p { color: var(--color-text-secondary); font-size: 1.1em; }
-        .card { background-color: var(--color-surface); border-radius: var(--border-radius); box-shadow: var(--shadow); padding: 25px; margin-bottom: 20px; }
-        .user-info { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .user-welcome { font-size: 1.1em; }
-        .user-name { font-weight: 500; color: var(--color-primary); }
-        .logout-btn { background-color: var(--color-danger); color: white; border: none; padding: 10px 20px; border-radius: var(--border-radius); cursor: pointer; font-size: 0.9em; font-weight: 500; transition: background-color 0.2s ease; }
-        .logout-btn:hover:not(:disabled) { background-color: #c82333; }
-        .logout-btn:disabled { background-color: #6c757d; cursor: not-allowed; }
-        .connection-status { padding: 5px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 500; }
-        .connection-status.connected { background: #d4edda; color: #155724; }
-        .connection-status.disconnected { background: #f8d7da; color: #721c24; }
-        .queue-panel { display: grid; grid-template-columns: 300px 1fr; gap: 25px; }
-        @media (max-width: 900px) { .queue-panel { grid-template-columns: 1fr; } }
-        .active-user-panel, .queue-table-container { border: 1px solid #dee2e6; border-radius: var(--border-radius); padding: 20px; }
-        .active-user-panel h3, .queue-table-container h3, .summary-panel h3 { font-size: 1.5em; margin-bottom: 20px; border-bottom: 2px solid var(--color-primary); padding-bottom: 10px; }
-        .active-user-panel { text-align: center; }
-        .timer-clock { position: relative; width: 150px; height: 150px; margin: 20px auto; }
-        .timer-circle { fill: none; stroke: #ddd; stroke-width: 10; }
-        .timer-progress { fill: none; stroke: var(--color-primary); stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.5s linear; }
-        .timer-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 2em; font-weight: bold; color: var(--color-primary); }
-        .timer-controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
-        .timer-btn { background-color: var(--color-primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; }
-        .timer-btn:hover { background-color: #003B6D; }
-        .timer-btn:disabled { background: #6c757d; cursor: not-allowed; }
-        .queue-table table { width: 100%; border-collapse: collapse; }
-        .queue-table th, .queue-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
-        .queue-table th { background-color: var(--color-primary); color: white; font-weight: 500; }
-        .queue-table tr:nth-of-type(even) { background-color: var(--color-background); }
-        .queue-table tr.current-user { background-color: #cfe2ff; font-weight: 500; }
-        .join-queue-btn { background-color: var(--color-success); color: white; border: none; padding: 12px 24px; border-radius: var(--border-radius); cursor: pointer; font-size: 1.1em; margin-top: 20px; transition: background-color 0.2s ease; display: block; width: 100%; text-align: center; font-weight: 500; }
-        .join-queue-btn:hover:not(:disabled) { background-color: #218838; }
-        .join-queue-btn:disabled { background-color: #6c757d; cursor: not-allowed; }
-        .leave-queue-btn { background-color: var(--color-danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: background-color 0.2s ease; }
-        .leave-queue-btn:hover { background-color: #c82333; }
-        .summary-panel { display: none; }
-        .summary-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; text-align: center; }
-        .stat-item { background: var(--color-background); padding: 15px; border-radius: var(--border-radius); }
-        .stat-item .label { font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 5px; display: block; }
-        .stat-item .value { font-size: 1.8em; font-weight: 700; color: var(--color-primary); }
-        .login-modal { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; padding: 20px;}
-        .login-content { background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); width: 100%; max-width: 450px; box-shadow: var(--shadow); text-align: center; }
-        .login-content h2 { margin-bottom: 10px; color: var(--color-primary); font-size: 1.8em; }
-        .login-subtitle { margin-bottom: 25px; color: var(--color-text-secondary); }
-        .login-input { width: 100%; padding: 15px; margin-bottom: 20px; border: 1px solid #ced4da; border-radius: var(--border-radius); font-size: 1em; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-        .login-input:focus { outline: none; border-color: var(--color-secondary); box-shadow: 0 0 0 3px rgba(0, 163, 224, 0.2); }
-        .login-btn { background-color: var(--color-primary); color: white; border: none; padding: 15px 30px; border-radius: var(--border-radius); font-size: 1.1em; cursor: pointer; transition: background-color 0.2s ease; width: 100%; font-weight: 500; }
-        .login-btn:hover { background-color: #003B6D; }
-        .login-btn:disabled { background: #6c757d; cursor: not-allowed; }
-        .error-message { background: #f8d7da; color: #721c24; padding: 15px; border-radius: var(--border-radius); margin-bottom: 20px; display: none; border: 1px solid #f5c6cb; }
-        .forgot-password { font-size: 0.9em; margin-top: 15px; }
-        .forgot-password a { color: var(--color-primary); text-decoration: none; }
-        .forgot-password a:hover { text-decoration: underline; }
-        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; vertical-align: middle;}
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .notification { position: fixed; top: 20px; right: 20px; color: white; padding: 15px 25px; border-radius: var(--border-radius); box-shadow: var(--shadow); transform: translateX(400px); opacity: 0; transition: all 0.5s ease; z-index: 1000; }
-        .notification.show { transform: translateX(0); opacity: 1; }
-        .notification.success { background-color: var(--color-success); }
-        .notification.warning { background-color: var(--color-warning); color: #212529; }
-        .notification.error { background-color: var(--color-danger); }
+        /* ...Tus estilos existentes... */
     </style>
 </head>
 <body>
+    <!-- ...Tu HTML existente... -->
+    <!-- (puedes usar el HTML de tu archivo actual, no es necesario cambiarlo) -->
 
-    <div class="login-modal" id="loginModal">
-        <div class="login-content">
-            <h2>Bienvenido</h2>
-            <p class="login-subtitle">Inicia sesión para acceder al sistema de turnos</p>
-            <div class="error-message" id="userError"></div>
-            <input type="email" class="login-input" id="emailInput" placeholder="Correo electrónico" required>
-            <input type="password" class="login-input" id="passwordInput" placeholder="Contraseña" required>
-            <button class="login-btn" id="loginButton">
-                <span id="loginButtonText">Iniciar Sesión</span>
-            </button>
-            <p class="forgot-password">
-                <a href="#" onclick="handleForgotPassword(event)">¿Olvidaste tu contraseña?</a>
-            </p>
-        </div>
-    </div>
-
-    <div class="container" id="mainContainer" style="display: none;">
-        <header class="header">
-            <h1>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
-                Sistema de Turnos
-            </h1>
-            <p>Gestión de colas de espera con sesión única</p>
-        </header>
-
-        <div class="card user-info">
-            <div class="user-welcome">
-                Bienvenido/a, <span class="user-name" id="userName">...</span>
-                <div class="connection-status connected" id="connectionStatus">🟢 Conectado</div>
-            </div>
-            <div class="current-time" id="currentTime"></div>
-            <button class="logout-btn" id="logoutBtn" onclick="logout()">Cerrar Sesión</button>
-        </div>
-        
-        <div class="card summary-panel" id="summaryPanel">
-            <h3>Tu Resumen de Espera</h3>
-            <div class="summary-stats" id="summaryStats"></div>
-        </div>
-
-        <div class="card queue-panel">
-            <div class="active-user-panel">
-                <h3>Usuario Activo</h3>
-                <div id="activeUserInfo">Nadie activo</div>
-                <div class="timer-clock">
-                    <svg width="150" height="150" viewBox="0 0 150 150">
-                        <circle class="timer-circle" cx="75" cy="75" r="65" />
-                        <circle class="timer-progress" id="timerProgress" cx="75" cy="75" r="65" stroke-dasharray="408.4" stroke-dashoffset="408.4" />
-                    </svg>
-                    <div class="timer-text" id="timerText">15:00</div>
-                </div>
-                <div id="timerControls" class="timer-controls"></div>
-            </div>
-            <div class="queue-table-container">
-                <h3>Cola de Espera</h3>
-                <div class="queue-table">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Usuario</th>
-                                <th>Ingreso</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="queueListBody"></tbody>
-                    </table>
-                </div>
-                <button id="joinQueueBtn" class="join-queue-btn">📝 Unirse a la Cola</button>
-            </div>
-        </div>
-    </div>
-    
-    <div class="notification" id="notification"></div>
-    
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script>
+    // --- CONFIGURACIÓN Y VARIABLES ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
+        authDomain: "sistema-turnos-gestores.firebaseapp.com",
+        databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
+        projectId: "sistema-turnos-gestores",
+        storageBucket: "sistema-turnos-gestores.appspot.com",
+        messagingSenderId: "322320112231",
+        appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
+        measurementId: "G-GV4JVLKEFY"
+    };
 
-<script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-            authDomain: "sistema-turnos-gestores.firebaseapp.com",
-            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-            projectId: "sistema-turnos-gestores",
-            storageBucket: "sistema-turnos-gestores.appspot.com",
-            messagingSenderId: "322320112231",
-            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-            measurementId: "G-GV4JVLKEFY"
-        };
+    let currentUser = null;
+    let heartbeatInterval = null, globalTimerInterval = null, syncInterval = null, pageClockInterval = null, titleNotificationInterval = null;
+    let isConnected = false;
+    let originalTitle = document.title;
+    let currentActiveUserId = null;
+    let serverTimeOffset = 0;
+    let isLoggingIn = false;
+    let sessionListener = null;
+    let sessionId = null;
 
-        // --- Variables Globales ---
-        let currentUser = null;
-        let heartbeatInterval = null, globalTimerInterval = null, syncInterval = null, pageClockInterval = null, titleNotificationInterval = null;
-        let isConnected = false;
-        let originalTitle = document.title;
-        let currentActiveUserId = null;
-        let serverTimeOffset = 0;
-        let isLoggingIn = false;
+    const TURN_TIME_SECONDS = 15 * 60;
+    const SYNC_INTERVAL_SECONDS = 5;
 
-        const TURN_TIME_SECONDS = 15 * 60;
-        const SYNC_INTERVAL_SECONDS = 5;
+    let database, auth, activeSessionsRef, connectedRef, queueRef, activeUserRef;
+    const QUEUE_PATH = 'queueSystem/queue';
+    const ACTIVE_USER_PATH = 'queueSystem/activeUser';
+    const ACTIVE_SESSIONS_PATH = 'activeSessions';
 
-        let database, auth, activeSessionsRef, connectedRef, queueRef, activeUserRef;
-        const QUEUE_PATH = 'queueSystem/queue';
-        const ACTIVE_USER_PATH = 'queueSystem/activeUser';
-        const ACTIVE_SESSIONS_PATH = 'activeSessions';
-
-        // --- INICIALIZACIÓN ---
-        document.addEventListener('DOMContentLoaded', initializeApp);
-
-        function getSessionId() {
-            if (!window._sessionId) {
-                window._sessionId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            }
-            return window._sessionId;
+    // --- SESIÓN ÚNICA POR PESTAÑA ---
+    function getSessionId() {
+        if (!sessionId) {
+            sessionId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         }
+        return sessionId;
+    }
 
-        function initializeApp() {
-            try {
-                firebase.initializeApp(firebaseConfig);
-                database = firebase.database();
-                auth = firebase.auth();
+    // --- INICIALIZACIÓN ---
+    document.addEventListener('DOMContentLoaded', initializeApp);
 
-                activeSessionsRef = database.ref(ACTIVE_SESSIONS_PATH);
-                connectedRef = database.ref('.info/connected');
-                queueRef = database.ref(QUEUE_PATH);
-                activeUserRef = database.ref(ACTIVE_USER_PATH);
+    function initializeApp() {
+        firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
+        auth = firebase.auth();
 
-                auth.onAuthStateChanged(auth_onAuthStateChanged);
+        activeSessionsRef = database.ref(ACTIVE_SESSIONS_PATH);
+        connectedRef = database.ref('.info/connected');
+        queueRef = database.ref(QUEUE_PATH);
+        activeUserRef = database.ref(ACTIVE_USER_PATH);
 
-                database.ref('/.info/serverTimeOffset').on('value', (snap) => {
-                    serverTimeOffset = snap.val() || 0;
-                });
+        auth.onAuthStateChanged(auth_onAuthStateChanged);
 
-                startPageClock();
-                document.getElementById('loginButton').onclick = handleLoginClick;
-                document.getElementById('passwordInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLoginClick(); });
-            } catch (error) {
-                showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
-            }
-        }
+        database.ref('/.info/serverTimeOffset').on('value', (snap) => {
+            serverTimeOffset = snap.val() || 0;
+        });
 
-        // --- CONTROLADORES DE ESTADO ---
-        async function auth_onAuthStateChanged(user) {
-            if (user) {
-                if (currentUser && currentUser.uid === user.uid) return;
-                // Verifica si ya hay una sesión activa en otro lado
-                const sessionSnap = await database.ref(ACTIVE_SESSIONS_PATH + "/" + user.uid).once('value');
-                if (sessionSnap.exists() && sessionSnap.val().status === 'active' && sessionSnap.val().sessionId && sessionSnap.val().sessionId !== getSessionId()) {
-                    await auth.signOut();
-                    showError("Ya tienes una sesión activa en otro dispositivo o pestaña.");
-                    return;
-                }
-                await onUserLoggedIn(user);
-            } else {
-                onUserLoggedOut();
-            }
-        }
+        startPageClock();
+        document.getElementById('loginButton').onclick = handleLoginClick;
+        document.getElementById('passwordInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLoginClick(); });
+        document.getElementById('logoutBtn').onclick = logout;
+        document.getElementById('joinQueueBtn').onclick = joinQueue;
+        document.getElementById('forgotPasswordLink').onclick = handleForgotPassword;
+    }
 
-        async function onUserLoggedIn(user) {
-            stopAllTimersAndListeners();
-            currentUser = user;
-
-            try {
-                const sessionRef = activeSessionsRef.child(user.uid);
-                await sessionRef.set({
-                    userId: user.uid,
-                    email: user.email,
-                    loginTime: firebase.database.ServerValue.TIMESTAMP,
-                    status: 'active',
-                    sessionId: getSessionId()
-                });
-                await sessionRef.onDisconnect().update({ status: 'disconnected' });
-
-                // Listener para detectar si la sesión fue cerrada en otra pestaña
-                sessionRef.on('value', snap => {
-                    const data = snap.val();
-                    if (!data || data.status !== 'active' || data.sessionId !== getSessionId()) {
-                        auth.signOut();
-                        showError("Tu sesión fue cerrada en otra pestaña o dispositivo.");
-                    }
-                });
-
-                document.getElementById('userName').textContent = currentUser.email;
-                document.getElementById('loginModal').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-
-                setupAppForUser();
-            } catch (error) {
-                console.error("Error al configurar la sesión del usuario:", error);
-                showError("No se pudo configurar tu sesión. Inténtalo de nuevo.");
+    // --- CONTROLADORES DE ESTADO ---
+    async function auth_onAuthStateChanged(user) {
+        if (user) {
+            if (currentUser && currentUser.uid === user.uid) return;
+            // SESIÓN ÚNICA: verifica si hay otra sesión activa
+            const sessionSnap = await activeSessionsRef.child(user.uid).once('value');
+            if (sessionSnap.exists() && sessionSnap.val().status === 'active' && sessionSnap.val().sessionId && sessionSnap.val().sessionId !== getSessionId()) {
                 await auth.signOut();
+                showError("Ya tienes una sesión activa en otra pestaña o dispositivo.");
+                return;
             }
+            await onUserLoggedIn(user);
+        } else {
+            onUserLoggedOut();
         }
+    }
 
-        function onUserLoggedOut() {
-            cleanupSessionState();
+    async function onUserLoggedIn(user) {
+        stopAllTimersAndListeners();
+        currentUser = user;
+        try {
+            const sessionRef = activeSessionsRef.child(user.uid);
+            await sessionRef.set({
+                userId: user.uid,
+                email: user.email,
+                loginTime: firebase.database.ServerValue.TIMESTAMP,
+                status: 'active',
+                sessionId: getSessionId()
+            });
+            await sessionRef.onDisconnect().update({ status: 'disconnected' });
+
+            // Listener para detectar cierre de sesión en otra pestaña
+            if (sessionListener) sessionRef.off('value', sessionListener);
+            sessionListener = snap => {
+                const data = snap.val();
+                if (!data || data.status !== 'active' || data.sessionId !== getSessionId()) {
+                    auth.signOut();
+                    showError("Tu sesión fue cerrada en otra pestaña o dispositivo.");
+                }
+            };
+            sessionRef.on('value', sessionListener);
+
+            document.getElementById('userName').textContent = currentUser.email;
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+
+            setupAppForUser();
+        } catch (error) {
+            showError("No se pudo configurar tu sesión. Inténtalo de nuevo.");
+            await auth.signOut();
         }
+    }
 
-        function setupAppForUser() {
-            setupConnectionListener();
-            setupQueueListeners();
-            startHeartbeat();
-            activateNextInQueue();
-            setupQueueSystem();
+    function onUserLoggedOut() {
+        cleanupSessionState();
+    }
+
+    function setupAppForUser() {
+        setupConnectionListener();
+        setupQueueListeners();
+        startHeartbeat();
+        activateNextInQueue();
+    }
+
+    // --- LÓGICA DE SESIÓN ---
+    async function handleLoginClick() {
+        if (isLoggingIn) return;
+        const email = document.getElementById('emailInput').value.trim();
+        const password = document.getElementById('passwordInput').value;
+        if (!email || !password) return showError('Ingresa correo y contraseña.');
+
+        const loginButton = document.getElementById('loginButton');
+        const loginButtonText = document.getElementById('loginButtonText');
+        isLoggingIn = true;
+        loginButton.disabled = true;
+        loginButtonText.innerHTML = '<span class="loading-spinner"></span> Verificando...';
+        showError(null);
+
+        try {
+            await auth.signInWithEmailAndPassword(email, password);
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            isLoggingIn = false;
+            loginButton.disabled = false;
+            loginButtonText.textContent = 'Iniciar Sesión';
         }
+    }
 
-        // --- LÓGICA DE SESIÓN ---
-        async function handleLoginClick() {
-            if (isLoggingIn) return;
-            const email = document.getElementById('emailInput').value.trim();
-            const password = document.getElementById('passwordInput').value;
-            if (!email || !password) return showError('Ingresa correo y contraseña.');
-
-            const loginButton = document.getElementById('loginButton');
-            const loginButtonText = document.getElementById('loginButtonText');
-            isLoggingIn = true;
-            loginButton.disabled = true;
-            loginButtonText.innerHTML = '<span class="loading-spinner"></span> Verificando...';
-            showError(null);
-
-            try {
-                await auth.signInWithEmailAndPassword(email, password);
-            } catch (error) {
-                showError(error.message);
-            } finally {
-                isLoggingIn = false;
-                loginButton.disabled = false;
-                loginButtonText.textContent = 'Iniciar Sesión';
+    async function logout() {
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (!currentUser || logoutBtn.disabled) return;
+        logoutBtn.disabled = true;
+        try {
+            if(currentUser.uid) {
+                await activeSessionsRef.child(currentUser.uid).update({ status: 'logged_out' });
             }
+            await auth.signOut();
+        } catch (error) {
+            logoutBtn.disabled = false;
         }
+    }
 
-        async function logout() {
-            const logoutBtn = document.getElementById('logoutBtn');
-            if (!currentUser || logoutBtn.disabled) return;
-            logoutBtn.disabled = true;
-            try {
-                if(currentUser.uid) {
-                    await activeSessionsRef.child(currentUser.uid).update({ status: 'logged_out' });
-                }
-                await auth.signOut();
-            } catch (error) {
-                console.error('Error en logout:', error);
-                logoutBtn.disabled = false;
+    function cleanupSessionState() {
+        stopAllTimersAndListeners();
+        currentUser = null; currentActiveUserId = null;
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('loginModal').style.display = 'flex';
+        document.getElementById('emailInput').value = '';
+        document.getElementById('passwordInput').value = '';
+        showError(null);
+        const logoutBtn = document.getElementById('logoutBtn');
+        if(logoutBtn) logoutBtn.disabled = false;
+    }
+
+    // --- LÓGICA DE COLA Y TURNOS ---
+    async function joinQueue() {
+        if (!isConnected || !currentUser) return;
+        const joinBtn = document.getElementById('joinQueueBtn');
+        joinBtn.disabled = true;
+        try {
+            const activeUserSnap = await activeUserRef.once('value');
+            if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
+                showNotification('Ya tienes un turno activo.', 'warning');
+                return;
             }
-        }
-
-        function cleanupSessionState() {
-            stopAllTimersAndListeners();
-            currentUser = null; currentActiveUserId = null;
-            document.getElementById('mainContainer').style.display = 'none';
-            document.getElementById('loginModal').style.display = 'flex';
-            document.getElementById('emailInput').value = '';
-            document.getElementById('passwordInput').value = '';
-            showError(null);
-            const logoutBtn = document.getElementById('logoutBtn');
-            if(logoutBtn) logoutBtn.disabled = false;
-        }
-
-        // --- LÓGICA DE COLA Y TURNOS ---
-        function setupQueueSystem() {
-            document.getElementById('joinQueueBtn').onclick = joinQueue;
-        }
-
-        async function joinQueue() {
-            if (!isConnected || !currentUser) return;
-            const joinBtn = document.getElementById('joinQueueBtn');
-            joinBtn.disabled = true;
-            try {
-                const activeUserSnap = await activeUserRef.once('value');
-                if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
-                    showNotification('Ya tienes un turno activo.', 'warning');
-                    return;
-                }
-                const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value');
-                if (queueSnap.exists()) {
-                    showNotification('Ya estás en la cola.', 'warning');
-                    return;
-                }
-                const newEntryRef = queueRef.push();
-                await newEntryRef.set({
-                    key: newEntryRef.key,
-                    userId: currentUser.uid,
-                    email: currentUser.email,
-                    joinedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-                showNotification('Te uniste a la cola.', 'success');
-                const currentActiveUser = (await activeUserRef.once('value')).val();
-                if (!currentActiveUser) {
-                    activateNextInQueue();
-                }
-            } catch (error) {
-                showNotification(`Error al unirse: ${error.message}`, 'error');
-                console.error("Error en joinQueue:", error);
-            } finally {
-                joinBtn.disabled = false;
+            const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value');
+            if (queueSnap.exists()) {
+                showNotification('Ya estás en la cola.', 'warning');
+                return;
             }
-        }
-
-        async function promoteNextUser() {
-            try {
-                const nextUser = await findNextValidUserInQueue();
-                if (!nextUser) {
-                    await activeUserRef.set(null); return;
-                }
-                const newActiveUserData = {
-                    userId: nextUser.userId, email: nextUser.email, isPaused: false,
-                    remainingTime: TURN_TIME_SECONDS,
-                    lastUpdated: firebase.database.ServerValue.TIMESTAMP
-                };
-                const { committed } = await activeUserRef.transaction(currentData => {
-                    return currentData === null ? newActiveUserData : undefined;
-                });
-                if (committed) {
-                    await queueRef.child(nextUser.key).remove();
-                }
-            } catch (error) {
-                console.error("Error al promover usuario:", error);
+            const newEntryRef = queueRef.push();
+            await newEntryRef.set({
+                key: newEntryRef.key,
+                userId: currentUser.uid,
+                email: currentUser.email,
+                joinedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            showNotification('Te uniste a la cola.', 'success');
+            const currentActiveUser = (await activeUserRef.once('value')).val();
+            if (!currentActiveUser) {
+                activateNextInQueue();
             }
+        } catch (error) {
+            showNotification(`Error al unirse: ${error.message}`, 'error');
+        } finally {
+            joinBtn.disabled = false;
         }
+    }
 
-        async function activateNextInQueue() {
-            try {
-                const snap = await activeUserRef.once('value');
-                if (snap.exists()) {
-                    const activeUser = snap.val();
-                    const sessionSnap = await activeSessionsRef.child(activeUser.userId).once('value');
-                    if(!sessionSnap.exists() || sessionSnap.val().status !== 'active') {
-                        await promoteNextUser();
-                    }
-                } else {
+    async function promoteNextUser() {
+        try {
+            const nextUser = await findNextValidUserInQueue();
+            if (!nextUser) {
+                await activeUserRef.set(null); return;
+            }
+            const newActiveUserData = {
+                userId: nextUser.userId, email: nextUser.email, isPaused: false,
+                remainingTime: TURN_TIME_SECONDS,
+                lastUpdated: firebase.database.ServerValue.TIMESTAMP
+            };
+            const { committed } = await activeUserRef.transaction(currentData => {
+                return currentData === null ? newActiveUserData : undefined;
+            });
+            if (committed) {
+                await queueRef.child(nextUser.key).remove();
+            }
+        } catch (error) {}
+    }
+
+    async function activateNextInQueue() {
+        try {
+            const snap = await activeUserRef.once('value');
+            if (snap.exists()) {
+                const activeUser = snap.val();
+                const sessionSnap = await activeSessionsRef.child(activeUser.userId).once('value');
+                if(!sessionSnap.exists() || sessionSnap.val().status !== 'active') {
                     await promoteNextUser();
                 }
-            } catch(error) {
-                console.error("Error al activar siguiente en cola:", error);
+            } else {
+                await promoteNextUser();
             }
-        }
+        } catch(error) {}
+    }
 
-        async function findNextValidUserInQueue() {
-            try {
-                const queueSnap = await queueRef.orderByChild('joinedAt').once('value');
-                if (!queueSnap.exists()) return null;
-                const queueData = queueSnap.val();
-                for (const key in queueData) {
-                    const userInQueue = { key, ...queueData[key] };
-                    const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
-                    if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
-                        return userInQueue;
-                    }
-                }
-                return null;
-            } catch(error) {
-                console.error("Error al buscar siguiente usuario válido:", error);
-                return null;
-            }
-        }
-
-        // --- LISTENERS Y TEMPORIZADORES ---
-        function setupQueueListeners() {
-            activeUserRef.on('value', handleActiveUserChange);
-            queueRef.on('value', (snap) => {
-                renderQueue(snap.val());
-                updateSummaryPanel(snap.val());
-            });
-        }
-
-        function handleActiveUserChange(snap) {
-            if (!currentUser) return;
-            const activeUserData = snap.val();
-            const newActiveUserId = activeUserData ? activeUserData.userId : null;
-            renderActiveUser(activeUserData);
-            updateSummaryPanel();
-            stopAllTimers();
-            if (activeUserData && !activeUserData.isPaused) {
-                if (activeUserData.userId === currentUser.uid) {
-                    startClientTimer(activeUserData);
-                    startAuthoritativeSync();
-                } else {
-                    updateTimerDisplayUI(activeUserData.remainingTime);
+    async function findNextValidUserInQueue() {
+        try {
+            const queueSnap = await queueRef.orderByChild('joinedAt').once('value');
+            if (!queueSnap.exists()) return null;
+            const queueData = queueSnap.val();
+            for (const key in queueData) {
+                const userInQueue = { key, ...queueData[key] };
+                const sessionSnap = await activeSessionsRef.child(userInQueue.userId).once('value');
+                if (sessionSnap.exists() && sessionSnap.val().status === 'active') {
+                    return userInQueue;
                 }
             }
-            if (newActiveUserId !== currentActiveUserId) {
-                currentActiveUserId = newActiveUserId;
-                if (newActiveUserId === currentUser.uid) {
-                    showTurnNotification();
-                } else {
-                    stopTitleNotification();
-                }
+            return null;
+        } catch(error) {
+            return null;
+        }
+    }
+
+    // --- LISTENERS Y TEMPORIZADORES ---
+    function setupQueueListeners() {
+        activeUserRef.on('value', handleActiveUserChange);
+        queueRef.on('value', (snap) => {
+            renderQueue(snap.val());
+            updateSummaryPanel(snap.val());
+        });
+    }
+
+    function handleActiveUserChange(snap) {
+        if (!currentUser) return;
+        const activeUserData = snap.val();
+        const newActiveUserId = activeUserData ? activeUserData.userId : null;
+        renderActiveUser(activeUserData);
+        updateSummaryPanel();
+        stopAllTimers();
+        if (activeUserData && !activeUserData.isPaused) {
+            if (activeUserData.userId === currentUser.uid) {
+                startClientTimer(activeUserData);
+                startAuthoritativeSync();
+            } else {
+                updateTimerDisplayUI(activeUserData.remainingTime);
             }
         }
+        if (newActiveUserId !== currentActiveUserId) {
+            currentActiveUserId = newActiveUserId;
+            if (newActiveUserId === currentUser.uid) {
+                showTurnNotification();
+            } else {
+                stopTitleNotification();
+            }
+        }
+    }
 
-        function startClientTimer(activeUserData) {
-            if (!activeUserData.lastUpdated) {
-                setTimeout(() => activeUserRef.once('value').then(handleActiveUserChange), 500);
+    function startClientTimer(activeUserData) {
+        if (!activeUserData.lastUpdated) {
+            setTimeout(() => activeUserRef.once('value').then(handleActiveUserChange), 500);
+            return;
+        }
+        stopAllTimers();
+        globalTimerInterval = setInterval(async () => {
+            const snap = await activeUserRef.once('value');
+            const data = snap.val();
+            if (!data || data.userId !== currentUser.uid || data.isPaused) {
+                clearInterval(globalTimerInterval);
                 return;
             }
-            stopAllTimers();
-            globalTimerInterval = setInterval(async () => {
-                const snap = await activeUserRef.once('value');
-                const data = snap.val();
-                if (!data || data.userId !== currentUser.uid || data.isPaused) {
-                    clearInterval(globalTimerInterval);
-                    return;
-                }
-                const serverNow = Date.now() + serverTimeOffset;
-                const elapsedMillis = serverNow - data.lastUpdated;
-                const elapsedSeconds = Math.floor(elapsedMillis / 1000);
-                const remaining = data.remainingTime - elapsedSeconds;
-                updateSummaryPanel(null, remaining);
-                if (remaining >= 0) {
-                    updateTimerDisplayUI(remaining);
-                } else {
-                    updateTimerDisplayUI(0);
-                    clearInterval(globalTimerInterval);
-                }
-            }, 1000);
-        }
+            const serverNow = Date.now() + serverTimeOffset;
+            const elapsedMillis = serverNow - data.lastUpdated;
+            const elapsedSeconds = Math.floor(elapsedMillis / 1000);
+            const remaining = Math.max(0, data.remainingTime - elapsedSeconds);
+            updateSummaryPanel(null, remaining);
+            updateTimerDisplayUI(remaining);
+            if (remaining <= 0) {
+                clearInterval(globalTimerInterval);
+            }
+        }, 1000);
+    }
 
-        function startAuthoritativeSync() {
-            stopAllTimers();
-            syncInterval = setInterval(async () => {
-                try {
-                    const snap = await activeUserRef.once('value');
-                    const activeUserData = snap.val();
-                    if (!activeUserData || activeUserData.userId !== currentUser.uid || activeUserData.isPaused) {
-                        stopAllTimers(); return;
-                    }
-                    const serverNow = Date.now() + serverTimeOffset;
-                    const elapsed = Math.floor((serverNow - activeUserData.lastUpdated) / 1000);
-                    const remaining = activeUserData.remainingTime - elapsed;
-                    if (remaining <= 0) {
-                        stopAllTimers();
-                        await promoteNextUser();
-                    } else {
-                        await activeUserRef.update({
-                            remainingTime: remaining,
-                            lastUpdated: firebase.database.ServerValue.TIMESTAMP
-                        });
-                    }
-                } catch (error) {
-                    console.error("Error en el sync autoritativo:", error);
-                    stopAllTimers();
-                }
-            }, SYNC_INTERVAL_SECONDS * 1000);
-        }
-
-        async function pauseTimer() {
-            if (!currentUser) return;
+    function startAuthoritativeSync() {
+        stopAllTimers();
+        syncInterval = setInterval(async () => {
             try {
                 const snap = await activeUserRef.once('value');
-                if(!snap.exists() || snap.val().userId !== currentUser.uid) return;
+                const activeUserData = snap.val();
+                if (!activeUserData || activeUserData.userId !== currentUser.uid || activeUserData.isPaused) {
+                    stopAllTimers(); return;
+                }
                 const serverNow = Date.now() + serverTimeOffset;
-                const elapsed = Math.floor((serverNow - snap.val().lastUpdated) / 1000);
-                const remaining = snap.val().remainingTime - elapsed;
-                await activeUserRef.update({
-                    isPaused: true,
-                    remainingTime: Math.max(0, remaining)
-                });
-            } catch (error) {
-                console.error("Error al pausar:", error);
-            }
-        }
-
-        async function resumeTimer() {
-            if (currentUser) {
-                try {
+                const elapsed = Math.floor((serverNow - activeUserData.lastUpdated) / 1000);
+                const remaining = activeUserData.remainingTime - elapsed;
+                if (remaining <= 0) {
+                    stopAllTimers();
+                    await promoteNextUser();
+                } else {
                     await activeUserRef.update({
-                        isPaused: false,
+                        remainingTime: remaining,
                         lastUpdated: firebase.database.ServerValue.TIMESTAMP
                     });
-                } catch (error) {
-                    console.error("Error al reanudar:", error);
                 }
-            }
-        }
-
-        // --- PANEL DE RESUMEN DE ESPERA ---
-        async function updateSummaryPanel(queueData = null, activeUserRemainingTime = -1) {
-            const summaryPanel = document.getElementById('summaryPanel');
-            const summaryStats = document.getElementById('summaryStats');
-            if (!currentUser || !summaryPanel || !summaryStats) return;
-            try {
-                const finalQueueData = queueData || (await queueRef.once('value').then(s => s.val()));
-                const sortedQueue = finalQueueData ? Object.values(finalQueueData).sort((a, b) => a.joinedAt - b.joinedAt) : [];
-                const myQueueIndex = sortedQueue.findIndex(u => u.userId === currentUser.uid);
-
-                if (myQueueIndex === -1) {
-                    summaryPanel.style.display = 'none'; return;
-                }
-                summaryPanel.style.display = 'block';
-
-                const myPosition = myQueueIndex + 1;
-                const usersAhead = myQueueIndex;
-
-                let finalActiveTime = 0;
-                let addActiveUserTime = true;
-                if (activeUserRemainingTime >= 0) {
-                    finalActiveTime = activeUserRemainingTime;
-                } else {
-                    const activeUserSnap = await activeUserRef.once('value');
-                    if (activeUserSnap.exists()) {
-                        const activeUser = activeUserSnap.val();
-                        if (activeUser.isPaused) {
-                            addActiveUserTime = false;
-                        } else if (activeUser.lastUpdated) {
-                            const serverNow = Date.now() + serverTimeOffset;
-                            const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
-                            finalActiveTime = Math.max(0, activeUser.remainingTime - elapsed);
-                        } else {
-                            finalActiveTime = activeUser.remainingTime || 0;
-                        }
-                    } else {
-                        addActiveUserTime = false;
-                    }
-                }
-
-                let estimatedWaitSeconds = usersAhead * TURN_TIME_SECONDS;
-                if (addActiveUserTime) {
-                    estimatedWaitSeconds += finalActiveTime;
-                }
-                const waitMinutes = Math.floor(estimatedWaitSeconds / 60);
-                const waitSeconds = estimatedWaitSeconds % 60;
-                const formattedWaitTime = `${waitMinutes.toString().padStart(2, '0')}:${waitSeconds.toString().padStart(2, '0')}`;
-
-                summaryStats.innerHTML = `
-                    <div class="stat-item"><span class="label">Tu Posición</span><span class="value">${myPosition}</span></div>
-                    <div class="stat-item"><span class="label">Usuarios Delante</span><span class="value">${usersAhead}</span></div>
-                    <div class="stat-item"><span class="label">Tiempo Estimado</span><span class="value">${formattedWaitTime}</span></div>
-                `;
-            } catch(error) {
-                console.error("Error actualizando el panel de resumen:", error);
-            }
-        }
-
-        // --- UTILIDADES Y UI ---
-        function stopAllTimers() {
-            if (globalTimerInterval) clearInterval(globalTimerInterval);
-            globalTimerInterval = null;
-            if (syncInterval) clearInterval(syncInterval);
-            syncInterval = null;
-        }
-        function stopAllTimersAndListeners() {
-            stopAllTimers();
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            heartbeatInterval = null;
-            if (activeUserRef) activeUserRef.off();
-            if (queueRef) queueRef.off();
-            if (connectedRef) connectedRef.off();
-            if (currentUser && activeSessionsRef) activeSessionsRef.child(currentUser.uid).off();
-        }
-        async function leaveQueue(key) {
-            if (!currentUser || !key) return;
-            try {
-                await queueRef.child(key).remove();
-                showNotification('Has salido de la cola.', 'success');
-            } catch(e) {
-                console.error("Error al salir de la cola:", e);
-            }
-        }
-        async function handleForgotPassword(e) {
-            e.preventDefault();
-            const email = document.getElementById('emailInput').value.trim();
-            if (!email) { showError("Ingresa tu correo."); return; }
-            try {
-                await auth.sendPasswordResetEmail(email);
-                showNotification(`Enlace enviado a ${email}`, 'success');
-                showError(null);
             } catch (error) {
-                showError(error.message);
+                stopAllTimers();
             }
+        }, SYNC_INTERVAL_SECONDS * 1000);
+    }
+
+    async function pauseTimer() {
+        if (!currentUser) return;
+        try {
+            const snap = await activeUserRef.once('value');
+            if(!snap.exists() || snap.val().userId !== currentUser.uid) return;
+            const serverNow = Date.now() + serverTimeOffset;
+            const elapsed = Math.floor((serverNow - snap.val().lastUpdated) / 1000);
+            const remaining = snap.val().remainingTime - elapsed;
+            await activeUserRef.update({
+                isPaused: true,
+                remainingTime: Math.max(0, remaining)
+            });
+        } catch (error) {}
+    }
+
+    async function resumeTimer() {
+        if (currentUser) {
+            try {
+                await activeUserRef.update({
+                    isPaused: false,
+                    lastUpdated: firebase.database.ServerValue.TIMESTAMP
+                });
+            } catch (error) {}
         }
-        function renderActiveUser(data) {
-            const activeUserInfo = document.getElementById('activeUserInfo');
-            const timerControls = document.getElementById('timerControls');
-            if (!activeUserInfo || !timerControls) return;
-            if (!data) {
-                activeUserInfo.innerHTML = 'Nadie activo';
-                timerControls.innerHTML = '';
-                updateTimerDisplayUI(TURN_TIME_SECONDS);
-                return;
+    }
+
+    // --- PANEL DE RESUMEN DE ESPERA ---
+    async function updateSummaryPanel(queueData = null, activeUserRemainingTime = -1) {
+        const summaryPanel = document.getElementById('summaryPanel');
+        const summaryStats = document.getElementById('summaryStats');
+        if (!currentUser || !summaryPanel || !summaryStats) return;
+        try {
+            const finalQueueData = queueData || (await queueRef.once('value').then(s => s.val()));
+            const sortedQueue = finalQueueData ? Object.values(finalQueueData).sort((a, b) => a.joinedAt - b.joinedAt) : [];
+            const myQueueIndex = sortedQueue.findIndex(u => u.userId === currentUser.uid);
+
+            if (myQueueIndex === -1) {
+                summaryPanel.style.display = 'none'; return;
             }
-            activeUserInfo.innerHTML = `<b>${data.email}</b>`;
-            if (currentUser && data.userId === currentUser.uid) {
-                timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`;
-                document.getElementById('pauseTimerBtn').onclick = pauseTimer;
-                document.getElementById('resumeTimerBtn').onclick = resumeTimer;
+            summaryPanel.style.display = 'block';
+
+            const myPosition = myQueueIndex + 1;
+            const usersAhead = myQueueIndex;
+
+            let finalActiveTime = 0;
+            let addActiveUserTime = true;
+            if (activeUserRemainingTime >= 0) {
+                finalActiveTime = activeUserRemainingTime;
             } else {
-                timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : '';
-            }
-        }
-        function renderQueue(queueData) {
-            const queueListBody = document.querySelector('#queueListBody');
-            if(!queueListBody) return;
-            queueListBody.innerHTML = '';
-            if (!queueData) {
-                queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>';
-                return;
-            }
-            const sortedQueue = Object.values(queueData).sort((a, b) => a.joinedAt - b.joinedAt);
-            if (sortedQueue.length === 0) {
-                queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>';
-                return;
-            }
-            sortedQueue.forEach((q, index) => {
-                const tr = document.createElement('tr');
-                if (currentUser && q.userId === currentUser.uid) tr.classList.add('current-user');
-                let actionCell = 'En espera';
-                if (currentUser && q.userId === currentUser.uid) {
-                    actionCell = `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">Salir</button>`;
-                }
-                tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>${actionCell}</td>`;
-                queueListBody.appendChild(tr);
-            });
-        }
-        function updateTimerDisplayUI(seconds) {
-            const timerText = document.getElementById('timerText');
-            const timerProgress = document.getElementById('timerProgress');
-            if(!timerText || !timerProgress) return;
-            const remaining = Math.max(0, seconds);
-            timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`;
-            const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0;
-            timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);
-        }
-        function setupConnectionListener() {
-            connectedRef.on('value', (snap) => {
-                isConnected = snap.val() === true;
-                updateConnectionStatus();
-                if(isConnected && currentUser) {
-                    activateNextInQueue();
-                }
-            });
-        }
-        function updateConnectionStatus() {
-            const el=document.getElementById('connectionStatus');
-            if(el) {
-                el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-                el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
-            }
-        }
-        function startHeartbeat() {
-            stopHeartbeat();
-            heartbeatInterval = setInterval(async () => {
-                if (currentUser && isConnected) {
-                    try {
-                        await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP });
-                    } catch (error) {
-                        console.error('Error en heartbeat:', error);
+                const activeUserSnap = await activeUserRef.once('value');
+                if (activeUserSnap.exists()) {
+                    const activeUser = activeUserSnap.val();
+                    if (activeUser.isPaused) {
+                        addActiveUserTime = false;
+                    } else if (activeUser.lastUpdated) {
+                        const serverNow = Date.now() + serverTimeOffset;
+                        const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
+                        finalActiveTime = Math.max(0, activeUser.remainingTime - elapsed);
+                    } else {
+                        finalActiveTime = activeUser.remainingTime || 0;
                     }
+                } else {
+                    addActiveUserTime = false;
                 }
-            }, 30000);
-        }
-        function stopHeartbeat() { clearInterval(heartbeatInterval); }
-        function startPageClock() {
-            if (pageClockInterval) clearInterval(pageClockInterval);
-            pageClockInterval = setInterval(updateCurrentTime, 1000);
-        }
-        function updateCurrentTime() {
-            const el = document.getElementById('currentTime');
-            if (el) {
-                el.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' });
             }
-        }
-        function showError(m) {
-            const el=document.getElementById('userError');
-            if(el) { el.style.display=m?'block':'none'; el.textContent=m; }
-        }
-        function showNotification(m,t='success') {
-            const el=document.getElementById('notification');
-            if(el) {
-                el.textContent=m;
-                el.className=`notification ${t} show`;
-                setTimeout(()=>el.classList.remove('show'),4000);
+
+            let estimatedWaitSeconds = usersAhead * TURN_TIME_SECONDS;
+            if (addActiveUserTime) {
+                estimatedWaitSeconds += finalActiveTime;
             }
+            const waitMinutes = Math.floor(estimatedWaitSeconds / 60);
+            const waitSeconds = estimatedWaitSeconds % 60;
+            const formattedWaitTime = `${waitMinutes.toString().padStart(2, '0')}:${waitSeconds.toString().padStart(2, '0')}`;
+
+            summaryStats.innerHTML = `
+                <div class="stat-item"><span class="label">Tu Posición</span><span class="value">${myPosition}</span></div>
+                <div class="stat-item"><span class="label">Usuarios Delante</span><span class="value">${usersAhead}</span></div>
+                <div class="stat-item"><span class="label">Tiempo Estimado</span><span class="value">${formattedWaitTime}</span></div>
+            `;
+        } catch(error) {}
+    }
+
+    // --- UTILIDADES Y UI ---
+    function stopAllTimers() {
+        if (globalTimerInterval) clearInterval(globalTimerInterval);
+        globalTimerInterval = null;
+        if (syncInterval) clearInterval(syncInterval);
+        syncInterval = null;
+    }
+    function stopAllTimersAndListeners() {
+        stopAllTimers();
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+        if (activeUserRef) activeUserRef.off();
+        if (queueRef) queueRef.off();
+        if (connectedRef) connectedRef.off();
+        if (currentUser && activeSessionsRef) activeSessionsRef.child(currentUser.uid).off();
+    }
+    async function leaveQueue(key) {
+        if (!currentUser || !key) return;
+        try {
+            await queueRef.child(key).remove();
+            showNotification('Has salido de la cola.', 'success');
+        } catch(e) {}
+    }
+    async function handleForgotPassword(e) {
+        e.preventDefault();
+        const email = document.getElementById('emailInput').value.trim();
+        if (!email) { showError("Ingresa tu correo."); return; }
+        try {
+            await auth.sendPasswordResetEmail(email);
+            showNotification(`Enlace enviado a ${email}`, 'success');
+            showError(null);
+        } catch (error) {
+            showError(error.message);
         }
-        function showTurnNotification() {
-            showNotification('¡Es tu turno!', 'success');
-            if (Notification.permission === "granted") {
-                new Notification("Sistema de Turnos", { body: "¡Es tu turno! Tienes 15 minutos.", icon: "/favicon.ico" });
+    }
+    function renderActiveUser(data) {
+        const activeUserInfo = document.getElementById('activeUserInfo');
+        const timerControls = document.getElementById('timerControls');
+        if (!activeUserInfo || !timerControls) return;
+        if (!data) {
+            activeUserInfo.innerHTML = 'Nadie activo';
+            timerControls.innerHTML = '';
+            updateTimerDisplayUI(TURN_TIME_SECONDS);
+            return;
+        }
+        activeUserInfo.innerHTML = `<b>${data.email}</b>`;
+        if (currentUser && data.userId === currentUser.uid) {
+            timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`;
+            document.getElementById('pauseTimerBtn').onclick = pauseTimer;
+            document.getElementById('resumeTimerBtn').onclick = resumeTimer;
+        } else {
+            timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : '';
+        }
+    }
+    function renderQueue(queueData) {
+        const queueListBody = document.querySelector('#queueListBody');
+        if(!queueListBody) return;
+        queueListBody.innerHTML = '';
+        if (!queueData) {
+            queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>';
+            return;
+        }
+        const sortedQueue = Object.values(queueData).sort((a, b) => a.joinedAt - b.joinedAt);
+        if (sortedQueue.length === 0) {
+            queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>';
+            return;
+        }
+        sortedQueue.forEach((q, index) => {
+            const tr = document.createElement('tr');
+            if (currentUser && q.userId === currentUser.uid) tr.classList.add('current-user');
+            let actionCell = 'En espera';
+            if (currentUser && q.userId === currentUser.uid) {
+                actionCell = `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">Salir</button>`;
             }
-            stopTitleNotification();
-            let isTitleVisible = true;
-            titleNotificationInterval = setInterval(() => {
-                document.title = isTitleVisible ? "¡ES TU TURNO!" : originalTitle;
-                isTitleVisible = !isTitleVisible;
-            }, 1000);
-        }
-        function stopTitleNotification() {
-            if (titleNotificationInterval) clearInterval(titleNotificationInterval);
-            titleNotificationInterval = null;
-            document.title = originalTitle;
-        }
-        function requestNotificationPermission() {
-            if ('Notification' in window && Notification.permission !== "denied") {
-                Notification.requestPermission();
+            tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>${actionCell}</td>`;
+            queueListBody.appendChild(tr);
+        });
+    }
+    function updateTimerDisplayUI(seconds) {
+        const timerText = document.getElementById('timerText');
+        const timerProgress = document.getElementById('timerProgress');
+        if(!timerText || !timerProgress) return;
+        const remaining = Math.max(0, seconds);
+        timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`;
+        const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0;
+        timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);
+    }
+    function setupConnectionListener() {
+        connectedRef.on('value', (snap) => {
+            isConnected = snap.val() === true;
+            updateConnectionStatus();
+            if(isConnected && currentUser) {
+                activateNextInQueue();
             }
+        });
+    }
+    function updateConnectionStatus() {
+        const el=document.getElementById('connectionStatus');
+        if(el) {
+            el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+            el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
         }
-        function showErrorScreen(m) {
-            stopAllTimersAndListeners();
-            if(pageClockInterval) clearInterval(pageClockInterval);
-            document.body.innerHTML=`<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; text-align: center; background-color: var(--color-background);"><div style="background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); box-shadow: var(--shadow);"><h2 style="color: var(--color-danger); font-size: 1.8em;">🆘 Error Crítico</h2><p style="margin: 20px 0; color: var(--color-text-primary);">${m}</p><button style="background:var(--color-primary); color:white; padding:12px 25px; border-radius:8px; cursor:pointer; border: none; font-size: 1em;" onclick="window.location.reload()">🔄 Recargar Página</button></div></div>`;
+    }
+    function startHeartbeat() {
+        stopHeartbeat();
+        heartbeatInterval = setInterval(async () => {
+            if (currentUser && isConnected) {
+                try {
+                    await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP });
+                } catch (error) {}
+            }
+        }, 30000);
+    }
+    function stopHeartbeat() { clearInterval(heartbeatInterval); }
+    function startPageClock() {
+        if (pageClockInterval) clearInterval(pageClockInterval);
+        pageClockInterval = setInterval(updateCurrentTime, 1000);
+    }
+    function updateCurrentTime() {
+        const el = document.getElementById('currentTime');
+        if (el) {
+            el.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' });
         }
+    }
+    function showError(m) {
+        const el=document.getElementById('userError');
+        if(el) { el.style.display=m?'block':'none'; el.textContent=m; }
+    }
+    function showNotification(m,t='success') {
+        const el=document.getElementById('notification');
+        if(el) {
+            el.textContent=m;
+            el.className=`notification ${t} show`;
+            setTimeout(()=>el.classList.remove('show'),4000);
+        }
+    }
+    function showTurnNotification() {
+        showNotification('¡Es tu turno!', 'success');
+        if (Notification.permission === "granted") {
+            new Notification("Sistema de Turnos", { body: "¡Es tu turno! Tienes 15 minutos.", icon: "/favicon.ico" });
+        }
+        stopTitleNotification();
+        let isTitleVisible = true;
+        titleNotificationInterval = setInterval(() => {
+            document.title = isTitleVisible ? "¡ES TU TURNO!" : originalTitle;
+            isTitleVisible = !isTitleVisible;
+        }, 1000);
+    }
+    function stopTitleNotification() {
+        if (titleNotificationInterval) clearInterval(titleNotificationInterval);
+        titleNotificationInterval = null;
+        document.title = originalTitle;
+    }
+    function requestNotificationPermission() {
+        if ('Notification' in window && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+    }
+    function showErrorScreen(m) {
+        stopAllTimersAndListeners();
+        if(pageClockInterval) clearInterval(pageClockInterval);
+        document.body.innerHTML=`<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; text-align: center; background-color: var(--color-background);"><div style="background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); box-shadow: var(--shadow);"><h2 style="color: var(--color-danger); font-size: 1.8em;">🆘 Error Crítico</h2><p style="margin: 20px 0; color: var(--color-text-primary);">${m}</p><button style="background:var(--color-primary); color:white; padding:12px 25px; border-radius:8px; cursor:pointer; border: none; font-size: 1em;" onclick="window.location.reload()">🔄 Recargar Página</button></div></div>`;
+    }
     </script>
 </body>
 </html>
