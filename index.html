@@ -154,17 +154,17 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-    <script>
+<script>
         const firebaseConfig = {
             // TU CONFIGURACIÓN DE FIREBASE AQUÍ
-             apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-             authDomain: "sistema-turnos-gestores.firebaseapp.com",
-             databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-             projectId: "sistema-turnos-gestores",
-             storageBucket: "sistema-turnos-gestores.appspot.com",
-             messagingSenderId: "322320112231",
-             appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-             measurementId: "G-GV4JVLKEFY"
+            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
+            authDomain: "sistema-turnos-gestores.firebaseapp.com",
+            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
+            projectId: "sistema-turnos-gestores",
+            storageBucket: "sistema-turnos-gestores.appspot.com",
+            messagingSenderId: "322320112231",
+            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
+            measurementId: "G-GV4JVLKEFY"
         };
 
         // --- Variables Globales ---
@@ -174,6 +174,7 @@
         let originalTitle = document.title;
         let currentActiveUserId = null;
         let serverTimeOffset = 0;
+        let isLoggingIn = false; // <-- Global ahora
 
         const TURN_TIME_SECONDS = 15 * 60;
         const SYNC_INTERVAL_SECONDS = 5;
@@ -191,12 +192,12 @@
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
                 auth = firebase.auth();
-                
+
                 activeSessionsRef = database.ref(ACTIVE_SESSIONS_PATH);
                 connectedRef = database.ref('.info/connected');
                 queueRef = database.ref(QUEUE_PATH);
                 activeUserRef = database.ref(ACTIVE_USER_PATH);
-                
+
                 auth.onAuthStateChanged(auth_onAuthStateChanged);
 
                 database.ref('/.info/serverTimeOffset').on('value', (snap) => {
@@ -210,7 +211,7 @@
                 showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
             }
         }
-        
+
         // --- CONTROLADORES DE ESTADO ---
         async function auth_onAuthStateChanged(user) {
             if (user) {
@@ -228,7 +229,7 @@
             try {
                 const sessionRef = activeSessionsRef.child(user.uid);
                 await sessionRef.set({
-                    userId: user.uid, email: user.email, 
+                    userId: user.uid, email: user.email,
                     loginTime: firebase.database.ServerValue.TIMESTAMP,
                     status: 'active'
                 });
@@ -249,17 +250,17 @@
         function onUserLoggedOut() {
             cleanupSessionState();
         }
-        
+
         function setupAppForUser() {
             setupConnectionListener();
             setupQueueListeners();
             startHeartbeat();
             activateNextInQueue();
+            setupQueueSystem(); // <-- Añadido para activar el botón de unirse a la cola
         }
 
         // --- LÓGICA DE SESIÓN ---
         async function handleLoginClick() {
-            let isLoggingIn = false;
             if (isLoggingIn) return;
             const email = document.getElementById('emailInput').value.trim();
             const password = document.getElementById('passwordInput').value;
@@ -292,7 +293,7 @@
                     await activeSessionsRef.child(currentUser.uid).update({ status: 'logged_out' });
                 }
                 await auth.signOut();
-            } catch (error) { 
+            } catch (error) {
                 console.error('Error en logout:', error);
                 logoutBtn.disabled = false;
             }
@@ -314,7 +315,7 @@
         function setupQueueSystem() {
             document.getElementById('joinQueueBtn').onclick = joinQueue;
         }
-        
+
         async function joinQueue() {
             if (!isConnected || !currentUser) return;
             const joinBtn = document.getElementById('joinQueueBtn');
@@ -322,11 +323,13 @@
             try {
                 const activeUserSnap = await activeUserRef.once('value');
                 if (activeUserSnap.exists() && activeUserSnap.val().userId === currentUser.uid) {
-                    showNotification('Ya tienes un turno activo.', 'warning'); return;
+                    showNotification('Ya tienes un turno activo.', 'warning');
+                    return;
                 }
                 const queueSnap = await queueRef.orderByChild('userId').equalTo(currentUser.uid).once('value');
                 if (queueSnap.exists()) {
-                    showNotification('Ya estás en la cola.', 'warning'); return;
+                    showNotification('Ya estás en la cola.', 'warning');
+                    return;
                 }
                 const newEntryRef = queueRef.push();
                 await newEntryRef.set({
@@ -340,14 +343,14 @@
                 if (!currentActiveUser) {
                     activateNextInQueue();
                 }
-            } catch (error) { 
-                showNotification(`Error al unirse: ${error.message}`, 'error'); 
+            } catch (error) {
+                showNotification(`Error al unirse: ${error.message}`, 'error');
                 console.error("Error en joinQueue:", error);
             } finally {
                 joinBtn.disabled = false;
             }
         }
-        
+
         async function promoteNextUser() {
             try {
                 const nextUser = await findNextValidUserInQueue();
@@ -357,7 +360,7 @@
                 const newActiveUserData = {
                     userId: nextUser.userId, email: nextUser.email, isPaused: false,
                     remainingTime: TURN_TIME_SECONDS,
-                    lastUpdated: firebase.database.ServerValue.TIMESTAMP 
+                    lastUpdated: firebase.database.ServerValue.TIMESTAMP
                 };
                 const { committed } = await activeUserRef.transaction(currentData => {
                     return currentData === null ? newActiveUserData : undefined;
@@ -369,7 +372,7 @@
                 console.error("Error al promover usuario:", error);
             }
         }
-        
+
         async function activateNextInQueue() {
             try {
                 const snap = await activeUserRef.once('value');
@@ -386,7 +389,7 @@
                 console.error("Error al activar siguiente en cola:", error);
             }
         }
-        
+
         async function findNextValidUserInQueue() {
             try {
                 const queueSnap = await queueRef.orderByChild('joinedAt').once('value');
@@ -405,7 +408,7 @@
                 return null;
             }
         }
-        
+
         // --- LISTENERS Y TEMPORIZADORES ---
         function setupQueueListeners() {
             activeUserRef.on('value', handleActiveUserChange);
@@ -443,22 +446,22 @@
                 setTimeout(() => activeUserRef.once('value').then(handleActiveUserChange), 500);
                 return;
             }
+            stopAllTimers(); // Limpia timers previos
             globalTimerInterval = setInterval(() => {
                 const serverNow = Date.now() + serverTimeOffset;
                 const elapsedMillis = serverNow - activeUserData.lastUpdated;
                 const elapsedSeconds = Math.floor(elapsedMillis / 1000);
-                const remaining = activeUserData.remainingTime - elapsedSeconds;
+                const remaining = Math.max(0, activeUserData.remainingTime - elapsedSeconds);
                 updateSummaryPanel(null, remaining);
-                if (remaining >= 0) {
-                    updateTimerDisplayUI(remaining);
-                } else {
-                    updateTimerDisplayUI(0);
+                updateTimerDisplayUI(remaining);
+                if (remaining <= 0) {
                     clearInterval(globalTimerInterval);
                 }
             }, 1000);
         }
 
         function startAuthoritativeSync() {
+            stopAllTimers(); // Limpia timers previos
             syncInterval = setInterval(async () => {
                 try {
                     const snap = await activeUserRef.once('value');
@@ -484,7 +487,7 @@
                 }
             }, SYNC_INTERVAL_SECONDS * 1000);
         }
-        
+
         async function pauseTimer() {
             if (!currentUser) return;
             try {
@@ -493,7 +496,7 @@
                 const serverNow = Date.now() + serverTimeOffset;
                 const elapsed = Math.floor((serverNow - snap.val().lastUpdated) / 1000);
                 const remaining = snap.val().remainingTime - elapsed;
-                await activeUserRef.update({ 
+                await activeUserRef.update({
                     isPaused: true,
                     remainingTime: Math.max(0, remaining)
                 });
@@ -505,16 +508,17 @@
         async function resumeTimer() {
             if (currentUser) {
                 try {
-                    await activeUserRef.update({ 
+                    await activeUserRef.update({
                         isPaused: false,
-                        lastUpdated: firebase.database.ServerValue.TIMESTAMP 
+                        lastUpdated: firebase.database.ServerValue.TIMESTAMP
                     });
                 } catch (error) {
                     console.error("Error al reanudar:", error);
                 }
             }
         }
-        
+
+        // --- PANEL DE RESUMEN DE ESPERA ---
         async function updateSummaryPanel(queueData = null, activeUserRemainingTime = -1) {
             const summaryPanel = document.getElementById('summaryPanel');
             const summaryStats = document.getElementById('summaryStats');
@@ -528,33 +532,40 @@
                     summaryPanel.style.display = 'none'; return;
                 }
                 summaryPanel.style.display = 'block';
-                
+
                 const myPosition = myQueueIndex + 1;
                 const usersAhead = myQueueIndex;
 
-                let finalActiveTime = activeUserRemainingTime;
-                if (finalActiveTime < 0) {
+                let finalActiveTime = 0;
+                let addActiveUserTime = true;
+                if (activeUserRemainingTime >= 0) {
+                    finalActiveTime = activeUserRemainingTime;
+                } else {
                     const activeUserSnap = await activeUserRef.once('value');
-                    if (activeUserSnap.exists() && !activeUserSnap.val().isPaused) {
+                    if (activeUserSnap.exists()) {
                         const activeUser = activeUserSnap.val();
-                        if (activeUser.lastUpdated) {
+                        if (activeUser.isPaused) {
+                            addActiveUserTime = false;
+                        } else if (activeUser.lastUpdated) {
                             const serverNow = Date.now() + serverTimeOffset;
                             const elapsed = Math.floor((serverNow - activeUser.lastUpdated) / 1000);
-                            finalActiveTime = activeUser.remainingTime - elapsed;
+                            finalActiveTime = Math.max(0, activeUser.remainingTime - elapsed);
                         } else {
-                           finalActiveTime = activeUser.remainingTime;
+                            finalActiveTime = activeUser.remainingTime || 0;
                         }
                     } else {
-                        finalActiveTime = activeUserSnap.val() ? activeUserSnap.val().remainingTime : 0;
+                        addActiveUserTime = false;
                     }
                 }
-                finalActiveTime = Math.max(0, finalActiveTime);
 
-                const estimatedWaitSeconds = finalActiveTime + (usersAhead * TURN_TIME_SECONDS);
+                let estimatedWaitSeconds = usersAhead * TURN_TIME_SECONDS;
+                if (addActiveUserTime) {
+                    estimatedWaitSeconds += finalActiveTime;
+                }
                 const waitMinutes = Math.floor(estimatedWaitSeconds / 60);
                 const waitSeconds = estimatedWaitSeconds % 60;
                 const formattedWaitTime = `${waitMinutes.toString().padStart(2, '0')}:${waitSeconds.toString().padStart(2, '0')}`;
-                
+
                 summaryStats.innerHTML = `
                     <div class="stat-item"><span class="label">Tu Posición</span><span class="value">${myPosition}</span></div>
                     <div class="stat-item"><span class="label">Usuarios Delante</span><span class="value">${usersAhead}</span></div>
@@ -564,26 +575,173 @@
                 console.error("Error actualizando el panel de resumen:", error);
             }
         }
-        
-        function stopAllTimers() { clearInterval(globalTimerInterval); clearInterval(syncInterval); }
-        function stopAllTimersAndListeners() { stopAllTimers(); clearInterval(heartbeatInterval); if(activeUserRef) activeUserRef.off(); if(queueRef) queueRef.off(); if(connectedRef) connectedRef.off(); }
-        async function leaveQueue(key) { if (!currentUser || !key) return; try { await queueRef.child(key).remove(); showNotification('Has salido de la cola.', 'success');} catch(e) { console.error("Error al salir de la cola:", e); }}
-        async function handleForgotPassword(e) { e.preventDefault(); const email = document.getElementById('emailInput').value.trim(); if (!email) { showError("Ingresa tu correo."); return; } try { await auth.sendPasswordResetEmail(email); showNotification(`Enlace enviado a ${email}`, 'success'); showError(null); } catch (error) { showError(error.message); }}
-        function renderActiveUser(data) { const activeUserInfo = document.getElementById('activeUserInfo'); const timerControls = document.getElementById('timerControls'); if (!activeUserInfo || !timerControls) return; if (!data) { activeUserInfo.innerHTML = 'Nadie activo'; timerControls.innerHTML = ''; updateTimerDisplayUI(TURN_TIME_SECONDS); return; } activeUserInfo.innerHTML = `<b>${data.email}</b>`; if (currentUser && data.userId === currentUser.uid) { timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`; document.getElementById('pauseTimerBtn').onclick = pauseTimer; document.getElementById('resumeTimerBtn').onclick = resumeTimer; } else { timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : ''; }}
-        function renderQueue(queueData) { const queueListBody = document.querySelector('#queueListBody'); if(!queueListBody) return; queueListBody.innerHTML = ''; if (!queueData) { queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>'; return; } const sortedQueue = Object.values(queueData).sort((a, b) => a.joinedAt - b.joinedAt); if (sortedQueue.length === 0) { queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>'; return; } sortedQueue.forEach((q, index) => { const tr = document.createElement('tr'); if (currentUser && q.userId === currentUser.uid) tr.classList.add('current-user'); tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>${currentUser && q.userId === currentUser.uid ? `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">Salir</button>` : 'En espera'}</td>`; queueListBody.appendChild(tr); });}
-        function updateTimerDisplayUI(seconds) { const timerText = document.getElementById('timerText'); const timerProgress = document.getElementById('timerProgress'); if(!timerText || !timerProgress) return; const remaining = Math.max(0, seconds); timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`; const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0; timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);}
-        function setupConnectionListener() { connectedRef.on('value', (snap) => { isConnected = snap.val() === true; updateConnectionStatus(); if(isConnected && currentUser) { activateNextInQueue(); }}); }
-        function updateConnectionStatus() { const el=document.getElementById('connectionStatus'); if(el) { el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado'; el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`; }}
-        function startHeartbeat() { stopHeartbeat(); heartbeatInterval = setInterval(async () => { if (currentUser && isConnected) { try { await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP }); } catch (error) { console.error('Error en heartbeat:', error); } } }, 30000); }
+
+        // --- UTILIDADES Y UI ---
+        function stopAllTimers() {
+            if (globalTimerInterval) clearInterval(globalTimerInterval);
+            globalTimerInterval = null;
+            if (syncInterval) clearInterval(syncInterval);
+            syncInterval = null;
+        }
+        function stopAllTimersAndListeners() {
+            stopAllTimers();
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+            if (activeUserRef) activeUserRef.off();
+            if (queueRef) queueRef.off();
+            if (connectedRef) connectedRef.off();
+        }
+        async function leaveQueue(key) {
+            if (!currentUser || !key) return;
+            try {
+                await queueRef.child(key).remove();
+                showNotification('Has salido de la cola.', 'success');
+            } catch(e) {
+                console.error("Error al salir de la cola:", e);
+            }
+        }
+        async function handleForgotPassword(e) {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value.trim();
+            if (!email) { showError("Ingresa tu correo."); return; }
+            try {
+                await auth.sendPasswordResetEmail(email);
+                showNotification(`Enlace enviado a ${email}`, 'success');
+                showError(null);
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+        function renderActiveUser(data) {
+            const activeUserInfo = document.getElementById('activeUserInfo');
+            const timerControls = document.getElementById('timerControls');
+            if (!activeUserInfo || !timerControls) return;
+            if (!data) {
+                activeUserInfo.innerHTML = 'Nadie activo';
+                timerControls.innerHTML = '';
+                updateTimerDisplayUI(TURN_TIME_SECONDS);
+                return;
+            }
+            activeUserInfo.innerHTML = `<b>${data.email}</b>`;
+            if (currentUser && data.userId === currentUser.uid) {
+                timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn" ${data.isPaused ? 'disabled' : ''}><span>⏸️</span> Pausar</button> <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><span>▶️</span> Reanudar</button>`;
+                document.getElementById('pauseTimerBtn').onclick = pauseTimer;
+                document.getElementById('resumeTimerBtn').onclick = resumeTimer;
+            } else {
+                timerControls.innerHTML = data.isPaused ? '<i>Turno en pausa</i>' : '';
+            }
+        }
+        function renderQueue(queueData) {
+            const queueListBody = document.querySelector('#queueListBody');
+            if(!queueListBody) return;
+            queueListBody.innerHTML = '';
+            if (!queueData) {
+                queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>';
+                return;
+            }
+            const sortedQueue = Object.values(queueData).sort((a, b) => a.joinedAt - b.joinedAt);
+            if (sortedQueue.length === 0) {
+                queueListBody.innerHTML = '<tr><td colspan="4">No hay usuarios en espera</td></tr>';
+                return;
+            }
+            sortedQueue.forEach((q, index) => {
+                const tr = document.createElement('tr');
+                if (currentUser && q.userId === currentUser.uid) tr.classList.add('current-user');
+                let actionCell = 'En espera';
+                if (currentUser && q.userId === currentUser.uid) {
+                    actionCell = `<button class="leave-queue-btn" onclick="leaveQueue('${q.key}')">Salir</button>`;
+                }
+                tr.innerHTML = `<td>${index + 1}</td> <td>${q.email}</td> <td>${new Date(q.joinedAt).toLocaleTimeString('es-DO')}</td> <td>${actionCell}</td>`;
+                queueListBody.appendChild(tr);
+            });
+        }
+        function updateTimerDisplayUI(seconds) {
+            const timerText = document.getElementById('timerText');
+            const timerProgress = document.getElementById('timerProgress');
+            if(!timerText || !timerProgress) return;
+            const remaining = Math.max(0, seconds);
+            timerText.textContent = `${Math.floor(remaining / 60).toString().padStart(2, '0')}:${(remaining % 60).toString().padStart(2, '0')}`;
+            const progress = TURN_TIME_SECONDS > 0 ? remaining / TURN_TIME_SECONDS : 0;
+            timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);
+        }
+        function setupConnectionListener() {
+            connectedRef.on('value', (snap) => {
+                isConnected = snap.val() === true;
+                updateConnectionStatus();
+                if(isConnected && currentUser) {
+                    activateNextInQueue();
+                }
+            });
+        }
+        function updateConnectionStatus() {
+            const el=document.getElementById('connectionStatus');
+            if(el) {
+                el.textContent = isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+                el.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
+            }
+        }
+        function startHeartbeat() {
+            stopHeartbeat();
+            heartbeatInterval = setInterval(async () => {
+                if (currentUser && isConnected) {
+                    try {
+                        await activeSessionsRef.child(currentUser.uid).update({ lastHeartbeatTime: firebase.database.ServerValue.TIMESTAMP });
+                    } catch (error) {
+                        console.error('Error en heartbeat:', error);
+                    }
+                }
+            }, 30000);
+        }
         function stopHeartbeat() { clearInterval(heartbeatInterval); }
-        function startPageClock() { if (pageClockInterval) clearInterval(pageClockInterval); pageClockInterval = setInterval(updateCurrentTime, 1000); }
-        function updateCurrentTime() { const el = document.getElementById('currentTime'); if (el) { el.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' }); }}
-        function showError(m) { const el=document.getElementById('userError'); if(el) { el.style.display=m?'block':'none'; el.textContent=m; }}
-        function showNotification(m,t='success') { const el=document.getElementById('notification'); if(el) { el.textContent=m; el.className=`notification ${t} show`; setTimeout(()=>el.classList.remove('show'),4000); }}
-        function showTurnNotification() { showNotification('¡Es tu turno!', 'success'); if (Notification.permission === "granted") { new Notification("Sistema de Turnos", { body: "¡Es tu turno! Tienes 15 minutos.", icon: "/favicon.ico" }); } stopTitleNotification(); let isTitleVisible = true; titleNotificationInterval = setInterval(() => { document.title = isTitleVisible ? "¡ES TU TURNO!" : originalTitle; isTitleVisible = !isTitleVisible; }, 1000); }
-        function stopTitleNotification() { if (titleNotificationInterval) clearInterval(titleNotificationInterval); titleNotificationInterval = null; document.title = originalTitle; }
-        function requestNotificationPermission() { if ('Notification' in window && Notification.permission !== "denied") { Notification.requestPermission(); } }
-        function showErrorScreen(m) { stopAllTimersAndListeners(); if(pageClockInterval) clearInterval(pageClockInterval); document.body.innerHTML=`<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; text-align: center; background-color: var(--color-background);"><div style="background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); box-shadow: var(--shadow);"><h2 style="color: var(--color-danger); font-size: 1.8em;">🆘 Error Crítico</h2><p style="margin: 20px 0; color: var(--color-text-primary);">${m}</p><button style="background:var(--color-primary); color:white; padding:12px 25px; border-radius:8px; cursor:pointer; border: none; font-size: 1em;" onclick="window.location.reload()">🔄 Recargar Página</button></div></div>`; }
+        function startPageClock() {
+            if (pageClockInterval) clearInterval(pageClockInterval);
+            pageClockInterval = setInterval(updateCurrentTime, 1000);
+        }
+        function updateCurrentTime() {
+            const el = document.getElementById('currentTime');
+            if (el) {
+                el.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' });
+            }
+        }
+        function showError(m) {
+            const el=document.getElementById('userError');
+            if(el) { el.style.display=m?'block':'none'; el.textContent=m; }
+        }
+        function showNotification(m,t='success') {
+            const el=document.getElementById('notification');
+            if(el) {
+                el.textContent=m;
+                el.className=`notification ${t} show`;
+                setTimeout(()=>el.classList.remove('show'),4000);
+            }
+        }
+        function showTurnNotification() {
+            showNotification('¡Es tu turno!', 'success');
+            if (Notification.permission === "granted") {
+                new Notification("Sistema de Turnos", { body: "¡Es tu turno! Tienes 15 minutos.", icon: "/favicon.ico" });
+            }
+            stopTitleNotification();
+            let isTitleVisible = true;
+            titleNotificationInterval = setInterval(() => {
+                document.title = isTitleVisible ? "¡ES TU TURNO!" : originalTitle;
+                isTitleVisible = !isTitleVisible;
+            }, 1000);
+        }
+        function stopTitleNotification() {
+            if (titleNotificationInterval) clearInterval(titleNotificationInterval);
+            titleNotificationInterval = null;
+            document.title = originalTitle;
+        }
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+        }
+        function showErrorScreen(m) {
+            stopAllTimersAndListeners();
+            if(pageClockInterval) clearInterval(pageClockInterval);
+            document.body.innerHTML=`<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; text-align: center; background-color: var(--color-background);"><div style="background: var(--color-surface); padding: 40px; border-radius: var(--border-radius); box-shadow: var(--shadow);"><h2 style="color: var(--color-danger); font-size: 1.8em;">🆘 Error Crítico</h2><p style="margin: 20px 0; color: var(--color-text-primary);">${m}</p><button style="background:var(--color-primary); color:white; padding:12px 25px; border-radius:8px; cursor:pointer; border: none; font-size: 1em;" onclick="window.location.reload()">🔄 Recargar Página</button></div></div>`;
+        }
     </script>
 </body>
 </html>
