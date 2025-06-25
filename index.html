@@ -181,28 +181,17 @@
         };
 
         const UIElements = {
-            loginModal: document.getElementById('loginModal'),
-            mainContainer: document.getElementById('mainContainer'),
-            loginButton: document.getElementById('loginButton'),
-            logoutBtn: document.getElementById('logoutBtn'),
-            emailInput: document.getElementById('emailInput'),
-            passwordInput: document.getElementById('passwordInput'),
-            userName: document.getElementById('userName'),
-            joinQueueBtn: document.getElementById('joinQueueBtn'),
-            queueListBody: document.getElementById('queueListBody'),
-            activeUserInfo: document.getElementById('activeUserInfo'),
-            timerText: document.getElementById('timerText'),
-            timerProgress: document.getElementById('timerProgress'),
-            timerControls: document.getElementById('timerControls'),
-            summaryPanel: document.getElementById('summaryPanel'),
-            summaryStats: document.getElementById('summaryStats'),
-            notification: document.getElementById('notification'),
-            userError: document.getElementById('userError'),
-            connectionStatus: document.getElementById('connectionStatus'),
-            currentTime: document.getElementById('currentTime'),
-            queueCount: document.getElementById('queueCount'),
-            forgotPasswordLink: document.getElementById('forgotPasswordLink'),
-            loginButtonText: document.getElementById('loginButtonText'),
+            loginModal: document.getElementById('loginModal'), mainContainer: document.getElementById('mainContainer'),
+            loginButton: document.getElementById('loginButton'), logoutBtn: document.getElementById('logoutBtn'),
+            emailInput: document.getElementById('emailInput'), passwordInput: document.getElementById('passwordInput'),
+            userName: document.getElementById('userName'), joinQueueBtn: document.getElementById('joinQueueBtn'),
+            queueListBody: document.getElementById('queueListBody'), activeUserInfo: document.getElementById('activeUserInfo'),
+            timerText: document.getElementById('timerText'), timerProgress: document.getElementById('timerProgress'),
+            timerControls: document.getElementById('timerControls'), summaryPanel: document.getElementById('summaryPanel'),
+            summaryStats: document.getElementById('summaryStats'), notification: document.getElementById('notification'),
+            userError: document.getElementById('userError'), connectionStatus: document.getElementById('connectionStatus'),
+            currentTime: document.getElementById('currentTime'), queueCount: document.getElementById('queueCount'),
+            forgotPasswordLink: document.getElementById('forgotPasswordLink'), loginButtonText: document.getElementById('loginButtonText'),
         };
 
         document.addEventListener('DOMContentLoaded', startApp);
@@ -220,7 +209,6 @@
                 onValue(ref(appState.db, '.info/serverTimeOffset'), snap => appState.serverTimeOffset = snap.val() || 0);
                 onValue(ref(appState.db, '.info/connected'), handleConnectionChange);
                 onAuthStateChanged(appState.auth, handleAuthStateChange);
-
             } catch (error) {
                 console.error("Error crítico de inicialización:", error);
                 showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
@@ -259,10 +247,8 @@
 
         async function handleAuthStateChange(user) {
             if (user) {
-                // Si Firebase nos dice que hay un usuario, procedemos a loguearlo en la app.
                 await onUserLoggedIn(user);
             } else {
-                // Si no hay usuario, mostramos la pantalla de login.
                 onUserLoggedOut();
             }
         }
@@ -277,7 +263,6 @@
             try {
                 await setPersistence(appState.auth, browserLocalPersistence);
                 await signInWithEmailAndPassword(appState.auth, email, password);
-                // onAuthStateChange se encargará del resto
             } catch (error) {
                 showError(getFriendlyAuthError(error.code));
                 setLoginButtonState(false);
@@ -285,22 +270,15 @@
         }
 
         async function onUserLoggedIn(user) {
-            if (!user) return;
-            if (appState.currentUser?.uid === user.uid) return;
-
+            if (!user || appState.currentUser?.uid === user.uid) return;
             cleanupAll();
             appState.currentUser = user;
-            
             try {
-                // CAMBIO CLAVE: Se ha quitado el chequeo de sesión única estricta.
-                // La nueva sesión simplemente sobreescribirá la antigua.
                 await setupUserSession(user);
-                
                 UIElements.userName.textContent = user.email;
                 UIElements.loginModal.style.display = 'none';
                 UIElements.mainContainer.style.display = 'block';
                 setLoginButtonState(false);
-                
                 setupAppListeners();
                 appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
                 appState.timers.summaryUpdater = setInterval(updateSummaryPanel, SUMMARY_UPDATE_INTERVAL_MS);
@@ -412,11 +390,13 @@
             }
         }
         
+        // CAMBIO CLAVE: Lógica de limpieza automática por cualquier cliente.
         function handleActiveUserChange(snap) {
             clearInterval(appState.timers.activeUserTimerInterval);
             stopTitleNotification();
             const activeUserData = snap.val();
             renderActiveUserUI(activeUserData);
+
             if (activeUserData) {
                 if (activeUserData.isPaused) {
                     updateTimerDisplayUI(activeUserData.remainingTime);
@@ -425,12 +405,30 @@
                         const serverNow = Date.now() + appState.serverTimeOffset;
                         const elapsed = Math.floor((serverNow - activeUserData.lastUpdated) / 1000);
                         const remaining = activeUserData.remainingTime - elapsed;
+                        
                         updateTimerDisplayUI(remaining);
+
                         if (remaining <= 0) {
                             clearInterval(appState.timers.activeUserTimerInterval);
-                            if (activeUserData.userId === appState.currentUser?.uid) {
-                                remove(ref(appState.db, 'queueSystem/activeUser'));
-                            }
+                            
+                            // CUALQUIER cliente puede intentar limpiar el turno expirado.
+                            // La transacción asegura que solo uno lo haga.
+                            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
+                            runTransaction(activeUserRef, (currentData) => {
+                                // Solo proceder si el usuario activo actual es el que ha expirado.
+                                if (currentData && currentData.userId === activeUserData.userId) {
+                                    return null; // Poner a null para eliminarlo.
+                                }
+                                // Si no, abortar la transacción.
+                                return; 
+                            }).then(({ committed }) => {
+                                // Si nuestra transacción fue la que tuvo éxito, promovemos al siguiente.
+                                if (committed) {
+                                    promoteNextUser();
+                                }
+                            }).catch(error => {
+                                console.error("Error en la transacción de limpieza de turno:", error);
+                            });
                         }
                     }, 1000);
                 }
