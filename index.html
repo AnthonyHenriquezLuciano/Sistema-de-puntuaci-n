@@ -156,7 +156,6 @@
 
 <script>
         const firebaseConfig = {
-            // TU CONFIGURACIÓN DE FIREBASE AQUÍ
             apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
             authDomain: "sistema-turnos-gestores.firebaseapp.com",
             databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
@@ -174,7 +173,7 @@
         let originalTitle = document.title;
         let currentActiveUserId = null;
         let serverTimeOffset = 0;
-        let isLoggingIn = false; // <-- Global ahora
+        let isLoggingIn = false;
 
         const TURN_TIME_SECONDS = 15 * 60;
         const SYNC_INTERVAL_SECONDS = 5;
@@ -186,6 +185,13 @@
 
         // --- INICIALIZACIÓN ---
         document.addEventListener('DOMContentLoaded', initializeApp);
+
+        function getSessionId() {
+            if (!window._sessionId) {
+                window._sessionId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
+            return window._sessionId;
+        }
 
         function initializeApp() {
             try {
@@ -216,6 +222,13 @@
         async function auth_onAuthStateChanged(user) {
             if (user) {
                 if (currentUser && currentUser.uid === user.uid) return;
+                // Verifica si ya hay una sesión activa en otro lado
+                const sessionSnap = await database.ref(ACTIVE_SESSIONS_PATH + "/" + user.uid).once('value');
+                if (sessionSnap.exists() && sessionSnap.val().status === 'active' && sessionSnap.val().sessionId && sessionSnap.val().sessionId !== getSessionId()) {
+                    await auth.signOut();
+                    showError("Ya tienes una sesión activa en otro dispositivo o pestaña.");
+                    return;
+                }
                 await onUserLoggedIn(user);
             } else {
                 onUserLoggedOut();
@@ -229,11 +242,22 @@
             try {
                 const sessionRef = activeSessionsRef.child(user.uid);
                 await sessionRef.set({
-                    userId: user.uid, email: user.email,
+                    userId: user.uid,
+                    email: user.email,
                     loginTime: firebase.database.ServerValue.TIMESTAMP,
-                    status: 'active'
+                    status: 'active',
+                    sessionId: getSessionId()
                 });
                 await sessionRef.onDisconnect().update({ status: 'disconnected' });
+
+                // Listener para detectar si la sesión fue cerrada en otra pestaña
+                sessionRef.on('value', snap => {
+                    const data = snap.val();
+                    if (!data || data.status !== 'active' || data.sessionId !== getSessionId()) {
+                        auth.signOut();
+                        showError("Tu sesión fue cerrada en otra pestaña o dispositivo.");
+                    }
+                });
 
                 document.getElementById('userName').textContent = currentUser.email;
                 document.getElementById('loginModal').style.display = 'none';
@@ -256,7 +280,7 @@
             setupQueueListeners();
             startHeartbeat();
             activateNextInQueue();
-            setupQueueSystem(); // <-- Añadido para activar el botón de unirse a la cola
+            setupQueueSystem();
         }
 
         // --- LÓGICA DE SESIÓN ---
@@ -426,9 +450,11 @@
             updateSummaryPanel();
             stopAllTimers();
             if (activeUserData && !activeUserData.isPaused) {
-                startClientTimer(activeUserData);
                 if (activeUserData.userId === currentUser.uid) {
+                    startClientTimer(activeUserData);
                     startAuthoritativeSync();
+                } else {
+                    updateTimerDisplayUI(activeUserData.remainingTime);
                 }
             }
             if (newActiveUserId !== currentActiveUserId) {
@@ -446,22 +472,30 @@
                 setTimeout(() => activeUserRef.once('value').then(handleActiveUserChange), 500);
                 return;
             }
-            stopAllTimers(); // Limpia timers previos
-            globalTimerInterval = setInterval(() => {
+            stopAllTimers();
+            globalTimerInterval = setInterval(async () => {
+                const snap = await activeUserRef.once('value');
+                const data = snap.val();
+                if (!data || data.userId !== currentUser.uid || data.isPaused) {
+                    clearInterval(globalTimerInterval);
+                    return;
+                }
                 const serverNow = Date.now() + serverTimeOffset;
-                const elapsedMillis = serverNow - activeUserData.lastUpdated;
+                const elapsedMillis = serverNow - data.lastUpdated;
                 const elapsedSeconds = Math.floor(elapsedMillis / 1000);
-                const remaining = Math.max(0, activeUserData.remainingTime - elapsedSeconds);
+                const remaining = data.remainingTime - elapsedSeconds;
                 updateSummaryPanel(null, remaining);
-                updateTimerDisplayUI(remaining);
-                if (remaining <= 0) {
+                if (remaining >= 0) {
+                    updateTimerDisplayUI(remaining);
+                } else {
+                    updateTimerDisplayUI(0);
                     clearInterval(globalTimerInterval);
                 }
             }, 1000);
         }
 
         function startAuthoritativeSync() {
-            stopAllTimers(); // Limpia timers previos
+            stopAllTimers();
             syncInterval = setInterval(async () => {
                 try {
                     const snap = await activeUserRef.once('value');
@@ -590,6 +624,7 @@
             if (activeUserRef) activeUserRef.off();
             if (queueRef) queueRef.off();
             if (connectedRef) connectedRef.off();
+            if (currentUser && activeSessionsRef) activeSessionsRef.child(currentUser.uid).off();
         }
         async function leaveQueue(key) {
             if (!currentUser || !key) return;
