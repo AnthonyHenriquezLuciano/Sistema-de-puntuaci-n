@@ -155,7 +155,6 @@
         import { getDatabase, ref, onValue, set, get, remove, onDisconnect, serverTimestamp, runTransaction, query, orderByChild, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-        // --- CONFIGURACIÓN Y CONSTANTES ---
         const firebaseConfig = {
             apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
             authDomain: "sistema-turnos-gestores.firebaseapp.com",
@@ -170,7 +169,7 @@
         const TURN_TIME_SECONDS = 15 * 60;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         const CLEANUP_INTERVAL_MS = 1 * 60 * 1000;
-        const SUMMARY_UPDATE_INTERVAL_MS = 3 * 1000; // MEJORA: Intervalo para el panel de resumen
+        const SUMMARY_UPDATE_INTERVAL_MS = 3 * 1000;
 
         const appState = {
             firebaseApp: null, auth: null, db: null, currentUser: null,
@@ -178,22 +177,32 @@
             sessionId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             originalTitle: document.title,
             timers: {},
-            // CORRECCIÓN: listeners es ahora un array simple de funciones para desuscribir.
             listeners: []
         };
 
         const UIElements = {
-            loginModal: document.getElementById('loginModal'), mainContainer: document.getElementById('mainContainer'),
-            loginButton: document.getElementById('loginButton'), logoutBtn: document.getElementById('logoutBtn'),
-            emailInput: document.getElementById('emailInput'), passwordInput: document.getElementById('passwordInput'),
-            userName: document.getElementById('userName'), joinQueueBtn: document.getElementById('joinQueueBtn'),
-            queueListBody: document.getElementById('queueListBody'), activeUserInfo: document.getElementById('activeUserInfo'),
-            timerText: document.getElementById('timerText'), timerProgress: document.getElementById('timerProgress'),
-            timerControls: document.getElementById('timerControls'), summaryPanel: document.getElementById('summaryPanel'),
-            summaryStats: document.getElementById('summaryStats'), notification: document.getElementById('notification'),
-            userError: document.getElementById('userError'), connectionStatus: document.getElementById('connectionStatus'),
-            currentTime: document.getElementById('currentTime'), queueCount: document.getElementById('queueCount'),
-            forgotPasswordLink: document.getElementById('forgotPasswordLink'), loginButtonText: document.getElementById('loginButtonText'),
+            loginModal: document.getElementById('loginModal'),
+            mainContainer: document.getElementById('mainContainer'),
+            loginButton: document.getElementById('loginButton'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            emailInput: document.getElementById('emailInput'),
+            passwordInput: document.getElementById('passwordInput'),
+            userName: document.getElementById('userName'),
+            joinQueueBtn: document.getElementById('joinQueueBtn'),
+            queueListBody: document.getElementById('queueListBody'),
+            activeUserInfo: document.getElementById('activeUserInfo'),
+            timerText: document.getElementById('timerText'),
+            timerProgress: document.getElementById('timerProgress'),
+            timerControls: document.getElementById('timerControls'),
+            summaryPanel: document.getElementById('summaryPanel'),
+            summaryStats: document.getElementById('summaryStats'),
+            notification: document.getElementById('notification'),
+            userError: document.getElementById('userError'),
+            connectionStatus: document.getElementById('connectionStatus'),
+            currentTime: document.getElementById('currentTime'),
+            queueCount: document.getElementById('queueCount'),
+            forgotPasswordLink: document.getElementById('forgotPasswordLink'),
+            loginButtonText: document.getElementById('loginButtonText'),
         };
 
         document.addEventListener('DOMContentLoaded', startApp);
@@ -233,13 +242,11 @@
                     try {
                         await remove(ref(appState.db, `queueSystem/queue/${key}`));
                         showNotification('Has salido de la cola.', 'success');
-                    } catch (err) {
-                        if(handleDatabaseError(err, 'leaveQueue')) return;
-                    }
+                    } catch (err) { if(handleDatabaseError(err, 'leaveQueue')) return; }
                 }
             });
         }
-
+        
         function handleConnectionChange(snap) {
             appState.isConnected = snap.val() === true;
             const statusEl = UIElements.connectionStatus;
@@ -252,22 +259,10 @@
 
         async function handleAuthStateChange(user) {
             if (user) {
-                if (appState.currentUser?.uid === user.uid) return;
-                try {
-                    await setPersistence(appState.auth, browserLocalPersistence);
-                    const sessionRef = ref(appState.db, `activeSessions/${user.uid}`);
-                    const sessionSnap = await get(sessionRef);
-
-                    if (sessionSnap.exists() && sessionSnap.val().sessionId !== appState.sessionId) {
-                        showError("Ya tienes una sesión activa en otro dispositivo o pestaña.");
-                        await signOut(appState.auth);
-                        return;
-                    }
-                    await onUserLoggedIn(user);
-                } catch(error) {
-                    if (handleDatabaseError(error, 'handleAuthStateChange')) return;
-                }
+                // Si Firebase nos dice que hay un usuario, procedemos a loguearlo en la app.
+                await onUserLoggedIn(user);
             } else {
+                // Si no hay usuario, mostramos la pantalla de login.
                 onUserLoggedOut();
             }
         }
@@ -282,6 +277,7 @@
             try {
                 await setPersistence(appState.auth, browserLocalPersistence);
                 await signInWithEmailAndPassword(appState.auth, email, password);
+                // onAuthStateChange se encargará del resto
             } catch (error) {
                 showError(getFriendlyAuthError(error.code));
                 setLoginButtonState(false);
@@ -289,37 +285,45 @@
         }
 
         async function onUserLoggedIn(user) {
+            if (!user) return;
+            if (appState.currentUser?.uid === user.uid) return;
+
             cleanupAll();
             appState.currentUser = user;
-            await setupUserSession(user);
-            UIElements.userName.textContent = user.email;
-            UIElements.loginModal.style.display = 'none';
-            UIElements.mainContainer.style.display = 'block';
-            setLoginButtonState(false);
-            setupAppListeners();
-            appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
-            // MEJORA: Iniciar temporizador para el panel de resumen.
-            appState.timers.summaryUpdater = setInterval(updateSummaryPanel, SUMMARY_UPDATE_INTERVAL_MS);
-            cleanupStaleUsers();
+            
+            try {
+                // CAMBIO CLAVE: Se ha quitado el chequeo de sesión única estricta.
+                // La nueva sesión simplemente sobreescribirá la antigua.
+                await setupUserSession(user);
+                
+                UIElements.userName.textContent = user.email;
+                UIElements.loginModal.style.display = 'none';
+                UIElements.mainContainer.style.display = 'block';
+                setLoginButtonState(false);
+                
+                setupAppListeners();
+                appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
+                appState.timers.summaryUpdater = setInterval(updateSummaryPanel, SUMMARY_UPDATE_INTERVAL_MS);
+                cleanupStaleUsers();
+            } catch (error) {
+                if (handleDatabaseError(error, 'onUserLoggedIn')) return;
+            }
         }
         
         async function handleLogout() {
             if (!appState.currentUser || UIElements.logoutBtn.disabled) return;
             UIElements.logoutBtn.disabled = true;
-            
-            // CORRECCIÓN: Limpiar todo ANTES de cerrar sesión para evitar errores de permiso.
             cleanupAll();
-            
             try {
                 await signOut(appState.auth);
             } catch (error) {
                 console.error("Error al cerrar sesión:", error);
-                UIElements.logoutBtn.disabled = false; // Habilitar de nuevo si falla
+                UIElements.logoutBtn.disabled = false;
             }
         }
 
         function onUserLoggedOut() {
-            // La limpieza ya se hizo en handleLogout, aquí solo se maneja la UI.
+            cleanupAll();
             appState.currentUser = null;
             UIElements.mainContainer.style.display = 'none';
             UIElements.loginModal.style.display = 'flex';
@@ -330,7 +334,7 @@
             setLoginButtonState(false);
             showError(null);
         }
-
+        
         async function setupUserSession(user) {
             const sessionRef = ref(appState.db, `activeSessions/${user.uid}`);
             try {
@@ -349,14 +353,11 @@
         function setupAppListeners() {
             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
-
-            // CORRECCIÓN: Guardar la función de desuscripción directamente.
             const activeUserUnsubscribe = onValue(activeUserRef, handleActiveUserChange, (error) => handleDatabaseError(error, 'activeUserListener'));
             const queueUnsubscribe = onValue(queueRef, snap => {
                 renderQueue(snap.val());
                 updateSummaryPanel();
             }, (error) => handleDatabaseError(error, 'queueListener'));
-
             appState.listeners.push(activeUserUnsubscribe, queueUnsubscribe);
         }
 
@@ -364,10 +365,8 @@
             const { currentUser, isConnected } = appState;
             if (!isConnected || !currentUser || UIElements.joinQueueBtn.disabled) return;
             UIElements.joinQueueBtn.disabled = true;
-        
             const userUid = currentUser.uid;
             const userInQueueRef = ref(appState.db, `queueSystem/queue/${userUid}`);
-        
             try {
                 await set(userInQueueRef, { userId: userUid, email: currentUser.email, joinedAt: serverTimestamp() });
                 showNotification('Te uniste a la cola.', 'success');
@@ -387,19 +386,15 @@
                     get(ref(appState.db, 'activeSessions')),
                     get(query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt')))
                 ]);
-
                 if (activeUserSnap.exists() || !queueSnap.exists()) return;
-
                 const activeSessions = sessionsSnap.val() || {};
                 let nextUser = null;
-                
                 queueSnap.forEach((userSnap) => {
                     const userData = userSnap.val();
                     if (!nextUser && activeSessions[userData.userId]) {
                         nextUser = userData;
                     }
                 });
-
                 if (nextUser) {
                     const { committed } = await runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
                          if (currentData) return;
@@ -422,7 +417,6 @@
             stopTitleNotification();
             const activeUserData = snap.val();
             renderActiveUserUI(activeUserData);
-
             if (activeUserData) {
                 if (activeUserData.isPaused) {
                     updateTimerDisplayUI(activeUserData.remainingTime);
@@ -538,7 +532,6 @@
             }
         }
         
-        // MEJORA: Ahora se llama periódicamente para ser en tiempo real.
         async function updateSummaryPanel() {
              if (!appState.currentUser) { UIElements.summaryPanel.style.display = 'none'; return; }
             try {
@@ -548,13 +541,10 @@
                 ]);
                 const sortedQueue = qSnap.exists() ? Object.values(qSnap.val()) : [];
                 const myQueueIndex = sortedQueue.findIndex(u => u.userId === appState.currentUser.uid);
-                
                 if (myQueueIndex === -1) { UIElements.summaryPanel.style.display = 'none'; return; }
                 UIElements.summaryPanel.style.display = 'block';
-                
                 const usersAhead = myQueueIndex;
                 let estimatedWaitSeconds = usersAhead * TURN_TIME_SECONDS;
-                
                 if (activeUserSnap.exists()) {
                     const activeUser = activeUserSnap.val();
                     let remainingTime = 0;
@@ -582,13 +572,9 @@
             UIElements.timerProgress.style.strokeDashoffset = 408.4 * (1 - progress);
         }
 
-        // --- UTILIDADES Y HELPERS ---
-        // CORRECCIÓN: Lógica de limpieza totalmente reescrita.
         function cleanupAll() {
-            // Limpiar todos los temporizadores (heartbeat, limpieza, reloj, etc.)
             Object.values(appState.timers).forEach(timerId => clearInterval(timerId));
             appState.timers = {};
-            // Limpiar todos los listeners de la base de datos
             appState.listeners.forEach(unsubscribe => unsubscribe());
             appState.listeners = [];
         }
