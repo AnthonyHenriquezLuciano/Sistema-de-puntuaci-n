@@ -33,10 +33,13 @@
         .timer-circle { fill: none; stroke: #ddd; stroke-width: 10; }
         .timer-progress { fill: none; stroke: var(--color-primary); stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.5s linear; }
         .timer-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 2em; font-weight: bold; color: var(--color-primary); }
-        .timer-controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
-        .timer-btn { background-color: var(--color-primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; }
-        .timer-btn:hover { background-color: #003B6D; }
+        .timer-controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .timer-btn { background-color: var(--color-primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; }
+        .timer-btn:hover:not(:disabled) { background-color: #003B6D; }
         .timer-btn:disabled { background: #6c757d; cursor: not-allowed; }
+        .leave-turn-btn { background-color: var(--color-danger); }
+        .leave-turn-btn:hover:not(:disabled) { background-color: #c82333; }
+        .pause-info { font-size: 0.9em; color: var(--color-text-secondary); margin-top: 10px; }
         .queue-table table { width: 100%; border-collapse: collapse; }
         .queue-table th, .queue-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
         .queue-table th { background-color: var(--color-primary); color: white; font-weight: 500; }
@@ -127,6 +130,7 @@
                     <div class="timer-text" id="timerText">15:00</div>
                 </div>
                 <div id="timerControls" class="timer-controls"></div>
+                <div id="pauseInfo" class="pause-info"></div>
             </div>
             <div class="queue-table-container">
                 <h3>Cola de Espera (<span id="queueCount">0</span>)</h3>
@@ -155,6 +159,7 @@
         import { getDatabase, ref, onValue, set, get, remove, onDisconnect, serverTimestamp, runTransaction, query, orderByChild, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
+        // --- CONSTANTES DE CONFIGURACIÓN ---
         const firebaseConfig = {
             apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
             authDomain: "sistema-turnos-gestores.firebaseapp.com",
@@ -166,11 +171,14 @@
             measurementId: "G-GV4JVLKEFY"
         };
         
-        const TURN_TIME_SECONDS = 15 * 60;
+        const TURN_TIME_SECONDS = 15 * 60; // 15 minutos
+        const MAX_PAUSE_DURATION_SECONDS = 30; // 30 segundos
+        const MAX_PAUSES_PER_TURN = 2; // 2 pausas por turno
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         const CLEANUP_INTERVAL_MS = 1 * 60 * 1000;
         const SUMMARY_UPDATE_INTERVAL_MS = 3 * 1000;
 
+        // --- ESTADO GLOBAL DE LA APP ---
         const appState = {
             firebaseApp: null, auth: null, db: null, currentUser: null,
             serverTimeOffset: 0, isConnected: false, isLoggingIn: false,
@@ -180,6 +188,7 @@
             listeners: []
         };
 
+        // --- ELEMENTOS DE LA UI ---
         const UIElements = {
             loginModal: document.getElementById('loginModal'), mainContainer: document.getElementById('mainContainer'),
             loginButton: document.getElementById('loginButton'), logoutBtn: document.getElementById('logoutBtn'),
@@ -187,13 +196,15 @@
             userName: document.getElementById('userName'), joinQueueBtn: document.getElementById('joinQueueBtn'),
             queueListBody: document.getElementById('queueListBody'), activeUserInfo: document.getElementById('activeUserInfo'),
             timerText: document.getElementById('timerText'), timerProgress: document.getElementById('timerProgress'),
-            timerControls: document.getElementById('timerControls'), summaryPanel: document.getElementById('summaryPanel'),
-            summaryStats: document.getElementById('summaryStats'), notification: document.getElementById('notification'),
-            userError: document.getElementById('userError'), connectionStatus: document.getElementById('connectionStatus'),
-            currentTime: document.getElementById('currentTime'), queueCount: document.getElementById('queueCount'),
-            forgotPasswordLink: document.getElementById('forgotPasswordLink'), loginButtonText: document.getElementById('loginButtonText'),
+            timerControls: document.getElementById('timerControls'), pauseInfo: document.getElementById('pauseInfo'),
+            summaryPanel: document.getElementById('summaryPanel'), summaryStats: document.getElementById('summaryStats'),
+            notification: document.getElementById('notification'), userError: document.getElementById('userError'),
+            connectionStatus: document.getElementById('connectionStatus'), currentTime: document.getElementById('currentTime'),
+            queueCount: document.getElementById('queueCount'), forgotPasswordLink: document.getElementById('forgotPasswordLink'),
+            loginButtonText: document.getElementById('loginButtonText'),
         };
 
+        // --- INICIALIZACIÓN ---
         document.addEventListener('DOMContentLoaded', startApp);
         
         function startApp() {
@@ -233,7 +244,15 @@
                     } catch (err) { if(handleDatabaseError(err, 'leaveQueue')) return; }
                 }
             });
+            // Listener para los botones de control del temporizador (delegado)
+            UIElements.timerControls.addEventListener('click', (e) => {
+                if (e.target.closest('#pauseTimerBtn')) toggleTimerPause(true);
+                if (e.target.closest('#resumeTimerBtn')) toggleTimerPause(false);
+                if (e.target.closest('#leaveTurnBtn')) leaveTurn();
+            });
         }
+        
+        // --- MANEJO DE ESTADO DE LA APP ---
         
         function handleConnectionChange(snap) {
             appState.isConnected = snap.val() === true;
@@ -246,11 +265,8 @@
         }
 
         async function handleAuthStateChange(user) {
-            if (user) {
-                await onUserLoggedIn(user);
-            } else {
-                onUserLoggedOut();
-            }
+            if (user) await onUserLoggedIn(user);
+            else onUserLoggedOut();
         }
 
         async function handleLogin() {
@@ -339,6 +355,8 @@
             appState.listeners.push(activeUserUnsubscribe, queueUnsubscribe);
         }
 
+        // --- LÓGICA PRINCIPAL DEL SISTEMA DE TURNOS ---
+
         async function joinQueue() {
             const { currentUser, isConnected } = appState;
             if (!isConnected || !currentUser || UIElements.joinQueueBtn.disabled) return;
@@ -369,16 +387,15 @@
                 let nextUser = null;
                 queueSnap.forEach((userSnap) => {
                     const userData = userSnap.val();
-                    if (!nextUser && activeSessions[userData.userId]) {
-                        nextUser = userData;
-                    }
+                    if (!nextUser && activeSessions[userData.userId]) nextUser = userData;
                 });
                 if (nextUser) {
                     const { committed } = await runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
                          if (currentData) return;
                          return {
                             userId: nextUser.userId, email: nextUser.email, isPaused: false,
-                            remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp()
+                            remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(),
+                            pausesUsed: 0 // NUEVO: Iniciar contador de pausas
                          };
                     });
                     if (committed) {
@@ -390,9 +407,9 @@
             }
         }
         
-        // CAMBIO CLAVE: Lógica de limpieza automática por cualquier cliente.
         function handleActiveUserChange(snap) {
             clearInterval(appState.timers.activeUserTimerInterval);
+            clearInterval(appState.timers.autoResumeTimer);
             stopTitleNotification();
             const activeUserData = snap.val();
             renderActiveUserUI(activeUserData);
@@ -400,65 +417,79 @@
             if (activeUserData) {
                 if (activeUserData.isPaused) {
                     updateTimerDisplayUI(activeUserData.remainingTime);
-                } else {
+                    // NUEVO: Iniciar temporizador de auto-reanudación si soy yo
+                    if(activeUserData.userId === appState.currentUser?.uid) {
+                        appState.timers.autoResumeTimer = setTimeout(() => {
+                            toggleTimerPause(false);
+                            showNotification("El tiempo de pausa ha terminado. Tu turno se ha reanudado.", "warning");
+                        }, MAX_PAUSE_DURATION_SECONDS * 1000);
+                    }
+                } else { // El turno está activo (no pausado)
                     appState.timers.activeUserTimerInterval = setInterval(() => {
                         const serverNow = Date.now() + appState.serverTimeOffset;
-                        const elapsed = Math.floor((serverNow - activeUserData.lastUpdated) / 1000);
+                        const elapsed = Math.floor((serverNow - (activeUserData.lastUpdated || serverNow)) / 1000);
                         const remaining = activeUserData.remainingTime - elapsed;
-                        
                         updateTimerDisplayUI(remaining);
 
                         if (remaining <= 0) {
                             clearInterval(appState.timers.activeUserTimerInterval);
-                            
-                            // CUALQUIER cliente puede intentar limpiar el turno expirado.
-                            // La transacción asegura que solo uno lo haga.
                             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
                             runTransaction(activeUserRef, (currentData) => {
-                                // Solo proceder si el usuario activo actual es el que ha expirado.
-                                if (currentData && currentData.userId === activeUserData.userId) {
-                                    return null; // Poner a null para eliminarlo.
-                                }
-                                // Si no, abortar la transacción.
+                                if (currentData && currentData.userId === activeUserData.userId) return null;
                                 return; 
                             }).then(({ committed }) => {
-                                // Si nuestra transacción fue la que tuvo éxito, promovemos al siguiente.
-                                if (committed) {
-                                    promoteNextUser();
-                                }
-                            }).catch(error => {
-                                console.error("Error en la transacción de limpieza de turno:", error);
-                            });
+                                if (committed) promoteNextUser();
+                            }).catch(error => console.error("Error en transacción de limpieza:", error));
                         }
                     }, 1000);
                 }
                 const timeSinceUpdate = (Date.now() + appState.serverTimeOffset) - (activeUserData.lastUpdated || 0);
-                if (activeUserData.userId === appState.currentUser?.uid && timeSinceUpdate < 5000) {
+                if (activeUserData.userId === appState.currentUser?.uid && timeSinceUpdate < 5000 && !activeUserData.isPaused) {
                    showTurnNotification();
                 }
-            } else {
+            } else { // No hay usuario activo
                 updateTimerDisplayUI(TURN_TIME_SECONDS);
                 if (appState.currentUser) promoteNextUser();
             }
         }
         
+        // NUEVO: Lógica de pausa con límites
         async function toggleTimerPause(shouldPause) {
             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             try {
                 await runTransaction(activeUserRef, (currentData) => {
-                    if (!currentData || currentData.userId !== appState.currentUser?.uid || currentData.isPaused === shouldPause) return;
-                    const updates = { isPaused: shouldPause };
-                    if (shouldPause) {
+                    if (!currentData || currentData.userId !== appState.currentUser?.uid || currentData.isPaused === shouldPause) {
+                        return; // Abortar si no soy yo, o si ya está en el estado deseado
+                    }
+                    
+                    const updates = { ...currentData, isPaused: shouldPause };
+
+                    if (shouldPause) { // Pausando
+                        if ((currentData.pausesUsed || 0) >= MAX_PAUSES_PER_TURN) {
+                            showNotification("Has alcanzado el límite de pausas para este turno.", "error");
+                            return; // Abortar si se alcanzó el límite
+                        }
                         const serverNow = Date.now() + appState.serverTimeOffset;
                         const elapsed = Math.floor((serverNow - currentData.lastUpdated) / 1000);
                         updates.remainingTime = Math.max(0, currentData.remainingTime - elapsed);
-                    } else {
+                        updates.pausesUsed = (currentData.pausesUsed || 0) + 1;
+                        updates.pauseStartTime = serverTimestamp(); // Registrar cuándo empezó la pausa
+                    } else { // Reanudando
                         updates.lastUpdated = serverTimestamp();
                     }
-                    return { ...currentData, ...updates };
+                    return updates;
                 });
             } catch (error) {
                 if (handleDatabaseError(error, 'toggleTimerPause')) return;
+            }
+        }
+
+        // NUEVO: Función para ceder el turno
+        async function leaveTurn() {
+            if (appState.currentUser) {
+                showNotification("Has cedido tu turno.", "warning");
+                await remove(ref(appState.db, `queueSystem/activeUser`));
+                // promoteNextUser se llamará automáticamente a través del listener handleActiveUserChange
             }
         }
 
@@ -515,16 +546,32 @@
         
         function renderActiveUserUI(data) {
             UIElements.activeUserInfo.innerHTML = data ? `<b>${data.email}</b>` : 'Nadie activo';
+            UIElements.pauseInfo.innerHTML = '';
             const isUserInQueueOrActive = document.querySelector('.current-user') || data?.userId === appState.currentUser?.uid;
             UIElements.joinQueueBtn.disabled = !!isUserInQueueOrActive;
+
             if (data?.userId === appState.currentUser?.uid) {
-                UIElements.timerControls.innerHTML = `<button id="pauseTimerBtn" class="timer-btn"><span>⏸️</span> Pausar</button><button id="resumeTimerBtn" class="timer-btn"><span>▶️</span> Reanudar</button>`;
-                const pauseBtn = document.getElementById('pauseTimerBtn');
-                const resumeBtn = document.getElementById('resumeTimerBtn');
-                pauseBtn.disabled = data.isPaused;
-                resumeBtn.disabled = !data.isPaused;
-                pauseBtn.onclick = () => toggleTimerPause(true);
-                resumeBtn.onclick = () => toggleTimerPause(false);
+                const pausesUsed = data.pausesUsed || 0;
+                const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
+                UIElements.timerControls.innerHTML = `
+                    <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused || pausesLeft <= 0 ? 'disabled' : ''}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>
+                        Pausar
+                    </button>
+                    <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                        Reanudar
+                    </button>
+                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
+                        Ceder Turno
+                    </button>
+                `;
+                if(data.isPaused){
+                    UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
+                } else {
+                    UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
+                }
             } else {
                 UIElements.timerControls.innerHTML = data?.isPaused ? '<i>Turno en pausa</i>' : '';
             }
