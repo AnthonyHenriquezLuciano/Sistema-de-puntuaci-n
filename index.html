@@ -243,7 +243,6 @@
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         const CLEANUP_INTERVAL_MS = 1 * 60 * 1000;
-        const SUMMARY_UPDATE_INTERVAL_MS = 1000;
 
         const appState = {
             firebaseApp: null, auth: null, db: null, currentUser: null,
@@ -425,11 +424,11 @@
                     joinedAt: serverTimestamp() 
                 });
                 showNotification('Te uniste a la cola.', 'success');
-                promoteNextUser();
             } catch (error) {
                 showNotification('Error al unirte a la cola.', 'error');
                 if (handleDatabaseError(error, 'joinQueue')) return;
             }
+            // El estado del botón se gestiona en las funciones de renderizado
         }
         
         async function promoteNextUser() {
@@ -574,39 +573,50 @@
             }
         }
 
+        // CORRECCIÓN DEFINITIVA: Renderizado de la cola a prueba de errores.
         function renderQueue(sortedQueueArray) {
             const body = UIElements.queueListBody;
+            body.innerHTML = '';
             UIElements.queueCount.textContent = sortedQueueArray.length;
 
             if (sortedQueueArray.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
                 return;
             }
-            
-            // CORRECCIÓN: Se re-escribe el renderizado para ser más robusto.
-            const rowsHtml = sortedQueueArray.map((q, index) => {
+
+            sortedQueueArray.forEach((q, index) => {
                 try {
+                    // Validar que el objeto 'q' y sus propiedades esenciales existan
+                    if (!q || !q.userId || !q.email) {
+                        console.warn("Saltando renderizado de un objeto de cola inválido:", q);
+                        return; // Esto actúa como un 'continue' en un bucle forEach
+                    }
+                    
+                    const tr = document.createElement('tr');
                     const isCurrentUser = appState.currentUser?.uid === q.userId;
-                    const rowClass = isCurrentUser ? 'current-user' : '';
-                    const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
+                    if (isCurrentUser) {
+                        tr.className = 'current-user';
+                    }
+                    
+                    const actionCell = isCurrentUser 
+                        ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` 
+                        : 'En espera';
                     
                     const joinedTime = typeof q.joinedAt === 'number'
                         ? new Date(q.joinedAt).toLocaleTimeString('es-DO')
                         : '...';
-                    
-                    return `<tr class="${rowClass}">
-                                <td>${index + 1}</td>
-                                <td>${q.email}</td>
-                                <td>${joinedTime}</td>
-                                <td>${actionCell}</td>
-                            </tr>`;
+
+                    tr.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${q.email}</td>
+                        <td>${joinedTime}</td>
+                        <td>${actionCell}</td>
+                    `;
+                    body.appendChild(tr);
                 } catch(e) {
-                    console.error("Error al procesar una fila de la cola:", q, e);
-                    return ''; // Devuelve una fila vacía si hay un error para no romper el renderizado.
+                    console.error("Error al renderizar una fila de la cola:", q, e);
                 }
-            }).join('');
-            
-            body.innerHTML = rowsHtml;
+            });
         }
         
         function renderActiveUserUI(data) {
