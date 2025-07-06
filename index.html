@@ -424,44 +424,56 @@
                     joinedAt: serverTimestamp() 
                 });
                 showNotification('Te uniste a la cola.', 'success');
+                // Llamar a promover después de unirse, en caso de que el puesto esté libre.
+                promoteNextUser();
             } catch (error) {
                 showNotification('Error al unirte a la cola.', 'error');
                 if (handleDatabaseError(error, 'joinQueue')) return;
             }
-            // El estado del botón se gestiona en las funciones de renderizado
         }
         
+        // CORRECCIÓN: Lógica de promoción rehecha para ser más robusta.
         async function promoteNextUser() {
-            try {
-                const activeUserSnap = await get(ref(appState.db, 'queueSystem/activeUser'));
-                if (activeUserSnap.exists()) return;
+            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
+            
+            // Primero, una lectura rápida para no hacer una transacción innecesaria
+            const activeUserSnap = await get(activeUserRef);
+            if (activeUserSnap.exists()) return; // Si ya hay alguien, no hacer nada.
 
-                const [sessionsSnap, queueSnap] = await Promise.all([
-                    get(ref(appState.db, 'activeSessions')),
-                    get(query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt')))
-                ]);
-                if (!queueSnap.exists()) return;
+            // Si el puesto está libre, intentar promover al siguiente.
+            const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
+            const queueSnap = await get(queueRef);
+            if (!queueSnap.exists()) return; // No hay nadie en cola.
 
-                const activeSessions = sessionsSnap.val() || {};
-                let nextUser = null;
-                queueSnap.forEach((userSnap) => {
-                    const userData = userSnap.val();
-                    if (!nextUser && activeSessions[userData.userId]) nextUser = userData;
-                });
-
-                if (nextUser) {
-                    const { committed } = await runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
-                         if (currentData) return;
-                         return {
-                            userId: nextUser.userId, email: nextUser.email, isPaused: false,
-                            remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(),
-                            pausesUsed: 0
-                         };
-                    });
-                    if (committed) await remove(ref(appState.db, `queueSystem/queue/${nextUser.userId}`));
+            let nextInLine = null;
+            queueSnap.forEach(userSnap => {
+                // Tomar el primer usuario de la cola ordenada
+                if (!nextInLine) {
+                    nextInLine = userSnap.val();
                 }
-            } catch (error) {
-                if (!error.message.includes('disconnect')) console.error("Error al promover usuario:", error);
+            });
+
+            if (nextInLine) {
+                // Usar una transacción para asegurar que solo un cliente promueva al usuario.
+                runTransaction(activeUserRef, (currentActiveUser) => {
+                    if (currentActiveUser === null) {
+                        return {
+                            userId: nextInLine.userId,
+                            email: nextInLine.email,
+                            isPaused: false,
+                            remainingTime: TURN_TIME_SECONDS,
+                            lastUpdated: serverTimestamp(),
+                            pausesUsed: 0
+                        };
+                    }
+                    // Si alguien más ya tomó el puesto, abortamos.
+                    return;
+                }).then(({ committed }) => {
+                    if (committed) {
+                        // Si nuestra transacción fue la exitosa, eliminamos al usuario de la cola.
+                        remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
+                    }
+                });
             }
         }
         
@@ -573,7 +585,7 @@
             }
         }
 
-        // CORRECCIÓN DEFINITIVA: Renderizado de la cola a prueba de errores.
+        // CORRECCIÓN DEFINITIVA: Renderizado de la cola simplificado y a prueba de errores.
         function renderQueue(sortedQueueArray) {
             const body = UIElements.queueListBody;
             body.innerHTML = '';
@@ -583,39 +595,31 @@
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
                 return;
             }
-
+            
             sortedQueueArray.forEach((q, index) => {
-                try {
-                    // Validar que el objeto 'q' y sus propiedades esenciales existan
-                    if (!q || !q.userId || !q.email) {
-                        console.warn("Saltando renderizado de un objeto de cola inválido:", q);
-                        return; // Esto actúa como un 'continue' en un bucle forEach
-                    }
-                    
-                    const tr = document.createElement('tr');
-                    const isCurrentUser = appState.currentUser?.uid === q.userId;
-                    if (isCurrentUser) {
-                        tr.className = 'current-user';
-                    }
-                    
-                    const actionCell = isCurrentUser 
-                        ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` 
-                        : 'En espera';
-                    
-                    const joinedTime = typeof q.joinedAt === 'number'
-                        ? new Date(q.joinedAt).toLocaleTimeString('es-DO')
-                        : '...';
-
-                    tr.innerHTML = `
-                        <td>${index + 1}</td>
-                        <td>${q.email}</td>
-                        <td>${joinedTime}</td>
-                        <td>${actionCell}</td>
-                    `;
-                    body.appendChild(tr);
-                } catch(e) {
-                    console.error("Error al renderizar una fila de la cola:", q, e);
+                const tr = document.createElement('tr');
+                
+                const isCurrentUser = appState.currentUser?.uid === q.userId;
+                if(isCurrentUser) {
+                    tr.className = 'current-user';
                 }
+                
+                const actionCell = isCurrentUser 
+                    ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` 
+                    : 'En espera';
+                
+                const joinedTime = typeof q.joinedAt === 'number'
+                    ? new Date(q.joinedAt).toLocaleTimeString('es-DO')
+                    : '...';
+
+                tr.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${q.email || '...'}</td>
+                    <td>${joinedTime}</td>
+                    <td>${actionCell}</td>
+                `;
+                
+                body.appendChild(tr);
             });
         }
         
