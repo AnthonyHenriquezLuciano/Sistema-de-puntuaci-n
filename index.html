@@ -317,6 +317,8 @@
                     try {
                         await remove(ref(appState.db, `queueSystem/queue/${key}`));
                         showQueueMessage('QUEUE_LEAVE_SUCCESS', 'success');
+                        // CORRECCIÓN: Actualizar estado del botón inmediatamente.
+                        updateJoinButtonState();
                     } catch (err) { if(handleDatabaseError(err, 'leaveQueueFromList')) return; }
                 }
             });
@@ -353,7 +355,6 @@
                 const activeUserSnap = await get(ref(appState.db, 'queueSystem/activeUser'));
                 
                 const sortedQueue = [];
-                // CORRECCIÓN 1: Capturar la 'key' del snapshot.
                 queueSnap.forEach(childSnap => {
                     const userData = childSnap.val();
                     userData.key = childSnap.key; 
@@ -416,6 +417,7 @@
                 setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
                 setupAppListeners();
                 appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
+                updateJoinButtonState(); // CORRECCIÓN: Llamar al iniciar sesión
             } catch (error) {
                 Logger.error('onUserLoggedIn', error, { userId: user.uid });
                 if (handleDatabaseError(error, 'onUserLoggedIn')) return;
@@ -466,12 +468,11 @@
                 handleActiveUserChange();
             }, (error) => handleDatabaseError(error, 'activeUserListener'));
             
-            // CORRECCIÓN 1: Capturar la 'key' del snapshot para cada usuario en la cola.
             const queueUnsubscribe = onValue(queueRef, (snap) => {
                 const sortedQueue = [];
                 snap.forEach(childSnap => {
                     const userData = childSnap.val();
-                    userData.key = childSnap.key; // ¡Aquí está la magia!
+                    userData.key = childSnap.key;
                     sortedQueue.push(userData);
                 });
                 appState.localQueue = sortedQueue;
@@ -522,7 +523,11 @@
                     let nextInLine = null;
                     
                     const queueArray = [];
-                    queueSnap.forEach(snap => queueArray.push(snap.val()));
+                    queueSnap.forEach(snap => {
+                        const userData = snap.val();
+                        userData.key = snap.key;
+                        queueArray.push(userData);
+                    });
 
                     for (const user of queueArray) {
                         if (activeSessions[user.userId]) {
@@ -545,7 +550,7 @@
                         
                         if (result.committed) {
                             Logger.info(`Usuario ${nextInLine.email} promovido.`);
-                            await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
+                            await remove(ref(appState.db, `queueSystem/queue/${nextInLine.key}`));
                         }
                     }
                     return true;
@@ -584,6 +589,8 @@
                 updateTimerDisplayUI(TURN_TIME_SECONDS);
                 if (appState.currentUser) promoteNextUserWithRetry();
             }
+            // CORRECCIÓN: Llamar al final para asegurar consistencia
+            updateJoinButtonState();
         }
         
         function startOptimizedTimer(activeUserData) {
@@ -673,53 +680,57 @@
                 Logger.error('cleanupStaleUsers', error);
             }
         }
-
-        function renderQueue() {
-            const sortedQueueArray = appState.localQueue;
-            const body = UIElements.queueListBody;
-            body.innerHTML = '';
-            UIElements.queueCount.textContent = sortedQueueArray.length;
-            if (sortedQueueArray.length === 0) {
-                body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
-            } else {
-                sortedQueueArray.forEach((q, index) => {
-                    const tr = createQueueRow(q, index);
-                    if (tr) body.appendChild(tr);
-                });
-            }
-            updateJoinButtonState();
-        }
-
-        // CORRECCIÓN 2: Actualizar `createQueueRow` para usar la `key` capturada.
-        function createQueueRow(queueItem, index) {
-            if (!queueItem || !queueItem.userId) return null;
-            const tr = document.createElement('tr');
-            tr.dataset.key = queueItem.key || queueItem.userId;
-            const isCurrentUser = appState.currentUser?.uid === queueItem.userId;
-            if (isCurrentUser) tr.className = 'current-user';
-            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.key || queueItem.userId}">Salir</button>` : 'En espera';
-            const joinedTime = typeof queueItem.joinedAt === 'number' ? new Date(queueItem.joinedAt).toLocaleTimeString('es-DO') : '...';
-            tr.innerHTML = `<td>${index + 1}</td><td>${queueItem.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
-            return tr;
-        }
-
+        
+        // CORRECCIÓN: Lógica del botón se mueve a su propia función para ser llamada desde varios sitios.
         function updateJoinButtonState() {
             if(!appState.currentUser) return;
             const isUserInQueue = appState.localQueue.some(user => user.userId === appState.currentUser.uid);
             const isUserActive = appState.localActiveUser?.userId === appState.currentUser.uid;
             UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
+
+        function renderQueue() {
+            const sortedQueueArray = appState.localQueue;
+            const body = UIElements.queueListBody;
+            const fragment = document.createDocumentFragment();
+            UIElements.queueCount.textContent = sortedQueueArray.length;
+
+            if (sortedQueueArray.length === 0) {
+                body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
+            } else {
+                sortedQueueArray.forEach((q, index) => {
+                    const tr = createQueueRow(q, index);
+                    if (tr) fragment.appendChild(tr);
+                });
+                body.innerHTML = '';
+                body.appendChild(fragment);
+            }
+            updateJoinButtonState();
+        }
+
+        function createQueueRow(queueItem, index) {
+            if (!queueItem || !queueItem.userId) return null;
+            const tr = document.createElement('tr');
+            // CORRECCIÓN: Usar la 'key' del snapshot que ahora guardamos.
+            tr.dataset.key = queueItem.key; 
+            const isCurrentUser = appState.currentUser?.uid === queueItem.userId;
+            if (isCurrentUser) tr.className = 'current-user';
+            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.key}">Salir</button>` : 'En espera';
+            const joinedTime = typeof queueItem.joinedAt === 'number' ? new Date(queueItem.joinedAt).toLocaleTimeString('es-DO') : '...';
+            tr.innerHTML = `<td>${index + 1}</td><td>${queueItem.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
+            return tr;
+        }
         
         function renderActiveUserUI() {
             const data = appState.localActiveUser;
             UIElements.activeUserInfo.innerHTML = data ? `<b>${data.email}</b>` : 'Nadie activo';
             UIElements.pauseInfo.innerHTML = '';
-            updateJoinButtonState();
-
+            
             if (data?.userId === appState.currentUser?.uid) {
                 const pausesUsed = data.pausesUsed || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 const isPaused = data.isPaused || false;
+
                 UIElements.timerControls.innerHTML = `
                     <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
                     <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
