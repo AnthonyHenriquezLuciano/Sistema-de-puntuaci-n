@@ -271,17 +271,12 @@
 
         document.addEventListener('DOMContentLoaded', startApp);
         
-        // CORRECCIÓN: La función `startApp` ahora es `async` para usar `await`
         async function startApp() {
             try {
                 appState.firebaseApp = initializeApp(firebaseConfig);
                 appState.auth = getAuth(appState.firebaseApp);
                 appState.db = getDatabase(appState.firebaseApp);
-
-                // CORRECCIÓN: La persistencia se establece UNA SOLA VEZ al iniciar la app.
-                // Esto soluciona el problema del botón de login que no funcionaba.
                 await setPersistence(appState.auth, inMemoryPersistence);
-
                 addEventListeners();
                 startPageClock();
                 requestNotificationPermission();
@@ -339,7 +334,6 @@
             if (!email || !password) return showError('Ingresa correo y contraseña.');
             setLoginButtonState(true, 'Verificando...');
             try {
-                // CORRECCIÓN: La llamada a setPersistence se ha movido a startApp.
                 await signInWithEmailAndPassword(appState.auth, email, password);
             } catch (error) {
                 showError(getFriendlyAuthError(error.code));
@@ -434,7 +428,6 @@
                 promoteNextUser();
             } catch (error) {
                 showNotification('Error al unirte a la cola.', 'error');
-                UIElements.joinQueueBtn.disabled = false;
                 if (handleDatabaseError(error, 'joinQueue')) return;
             }
         }
@@ -482,7 +475,7 @@
             if (activeUserData) {
                 if (activeUserData.isPaused) {
                     updateTimerDisplayUI(activeUserData.remainingTime);
-                    updateSummaryPanel(); 
+                    updateSummaryPanel();
                     if(activeUserData.userId === appState.currentUser?.uid) {
                         appState.timers.autoResumeTimer = setTimeout(() => {
                             toggleTimerPause(false);
@@ -583,17 +576,20 @@
 
         function renderQueue(sortedQueueArray) {
             const body = UIElements.queueListBody;
-            body.innerHTML = '';
             UIElements.queueCount.textContent = sortedQueueArray.length;
+
             if (sortedQueueArray.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
                 return;
             }
+            
+            // CORRECCIÓN: Se re-escribe el renderizado para ser más robusto.
             const rowsHtml = sortedQueueArray.map((q, index) => {
                 try {
                     const isCurrentUser = appState.currentUser?.uid === q.userId;
                     const rowClass = isCurrentUser ? 'current-user' : '';
                     const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
+                    
                     const joinedTime = typeof q.joinedAt === 'number'
                         ? new Date(q.joinedAt).toLocaleTimeString('es-DO')
                         : '...';
@@ -606,7 +602,7 @@
                             </tr>`;
                 } catch(e) {
                     console.error("Error al procesar una fila de la cola:", q, e);
-                    return '';
+                    return ''; // Devuelve una fila vacía si hay un error para no romper el renderizado.
                 }
             }).join('');
             
