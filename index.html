@@ -157,7 +157,7 @@
             <div class="error-message" id="userError"></div>
             <input type="email" class="login-input" id="emailInput" placeholder="Correo electrónico" required>
             <input type="password" class="login-input" id="passwordInput" placeholder="Contraseña" required>
-            <button class="login-btn" id="loginButton">
+            <button class="login-btn" id="loginButton" data-original-text="Iniciar Sesión">
                 <span id="loginButtonText">Iniciar Sesión</span>
             </button>
             <p class="forgot-password">
@@ -180,7 +180,7 @@
                 <div class="connection-status connected" id="connectionStatus">🟢 Conectado</div>
             </div>
             <div class="current-time" id="currentTime"></div>
-            <button class="logout-btn" id="logoutBtn">Cerrar Sesión</button>
+            <button class="logout-btn" id="logoutBtn" data-original-text="Cerrar Sesión">Cerrar Sesión</button>
         </div>
         <div class="card summary-panel" id="summaryPanel">
             <h3>Tu Resumen de Espera</h3>
@@ -215,7 +215,7 @@
                         <tbody id="queueListBody"></tbody>
                     </table>
                 </div>
-                <button id="joinQueueBtn" class="join-queue-btn">📝 Unirse a la Cola</button>
+                <button id="joinQueueBtn" class="join-queue-btn" data-original-text="📝 Unirse a la Cola">📝 Unirse a la Cola</button>
             </div>
         </div>
     </div>
@@ -225,28 +225,60 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
         import { getDatabase, ref, onValue, set, get, remove, onDisconnect, serverTimestamp, runTransaction, query, orderByChild, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+        // 1. SEGURIDAD: SIMULACIÓN DE VARIABLES DE ENTORNO
+        const process = {
+            env: {
+                VITE_FIREBASE_API_KEY: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
+                VITE_FIREBASE_AUTH_DOMAIN: "sistema-turnos-gestores.firebaseapp.com",
+                VITE_FIREBASE_DB_URL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
+                VITE_FIREBASE_PROJECT_ID: "sistema-turnos-gestores",
+                VITE_FIREBASE_STORAGE_BUCKET: "sistema-turnos-gestores.appspot.com",
+                VITE_FIREBASE_MESSAGING_SENDER_ID: "322320112231",
+                VITE_FIREBASE_APP_ID: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
+                VITE_FIREBASE_MEASUREMENT_ID: "G-GV4JVLKEFY"
+            }
+        };
 
         const firebaseConfig = {
-            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-            authDomain: "sistema-turnos-gestores.firebaseapp.com",
-            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-            projectId: "sistema-turnos-gestores",
-            storageBucket: "sistema-turnos-gestores.appspot.com",
-            messagingSenderId: "322320112231",
-            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-            measurementId: "G-GV4JVLKEFY"
+            apiKey: process.env.VITE_FIREBASE_API_KEY,
+            authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+            databaseURL: process.env.VITE_FIREBASE_DB_URL,
+            projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+            storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+            appId: process.env.VITE_FIREBASE_APP_ID,
+            measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID
         };
         
+        // --- CONSTANTES DE CONFIGURACIÓN Y ESTADO ---
         const TURN_TIME_SECONDS = 15 * 60;
         const MAX_PAUSE_DURATION_SECONDS = 30;
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
-        const CLEANUP_INTERVAL_MS = 1 * 60 * 1000;
+        const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+        const SESSION_TIMEOUT_MS = 10 * 60 * 1000; 
+
+        const MESSAGES = {
+            QUEUE_JOIN_SUCCESS: 'Te uniste a la cola.', QUEUE_JOIN_ERROR: 'Error al unirte a la cola.',
+            QUEUE_LEAVE_SUCCESS: 'Has salido de la cola.', TURN_NOTIFICATION: '¡Es tu turno!',
+            PAUSE_LIMIT_REACHED: 'Has alcanzado el límite de pausas para este turno.',
+            PAUSE_TIME_EXPIRED: 'El tiempo de pausa ha terminado. Tu turno se ha reanudado.'
+        };
+        
+        const Logger = {
+            error: (context, error, metadata = {}) => {
+                console.error(`[${new Date().toISOString()}] CONTEXT: ${context} | ERROR:`, error, "| METADATA:", metadata);
+            },
+            info: (message, metadata = {}) => {
+                console.info(`[${new Date().toISOString()}] INFO: ${message}`, metadata);
+            }
+        };
 
         const appState = {
             firebaseApp: null, auth: null, db: null, currentUser: null,
-            serverTimeOffset: 0, isConnected: false, isLoggingIn: false,
+            serverTimeOffset: 0, isConnected: false, wasConnected: true,
             sessionId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             originalTitle: document.title,
             timers: {}, listeners: [],
@@ -275,7 +307,7 @@
                 appState.firebaseApp = initializeApp(firebaseConfig);
                 appState.auth = getAuth(appState.firebaseApp);
                 appState.db = getDatabase(appState.firebaseApp);
-                await setPersistence(appState.auth, inMemoryPersistence);
+                await setPersistence(appState.auth, browserLocalPersistence);
                 addEventListeners();
                 startPageClock();
                 requestNotificationPermission();
@@ -283,7 +315,7 @@
                 onValue(ref(appState.db, '.info/connected'), handleConnectionChange);
                 onAuthStateChanged(appState.auth, handleAuthStateChange);
             } catch (error) {
-                console.error("Error crítico de inicialización:", error);
+                Logger.error('startApp', error);
                 showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
             }
         }
@@ -294,6 +326,7 @@
             UIElements.joinQueueBtn.onclick = joinQueue;
             UIElements.forgotPasswordLink.onclick = handleForgotPassword;
             UIElements.passwordInput.onkeypress = e => { if (e.key === 'Enter') handleLogin(); };
+            
             UIElements.queueListBody.addEventListener('click', async (e) => {
                 if (e.target.matches('.leave-queue-btn')) {
                     const key = e.target.dataset.key;
@@ -301,8 +334,8 @@
                     e.target.disabled = true;
                     try {
                         await remove(ref(appState.db, `queueSystem/queue/${key}`));
-                        showNotification('Has salido de la cola.', 'success');
-                    } catch (err) { if(handleDatabaseError(err, 'leaveQueue')) return; }
+                        showNotification(MESSAGES.QUEUE_LEAVE_SUCCESS, 'success');
+                    } catch (err) { if(handleDatabaseError(err, 'leaveQueueFromList')) return; }
                 }
             });
             UIElements.timerControls.addEventListener('click', (e) => {
@@ -315,10 +348,36 @@
         }
         
         function handleConnectionChange(snap) {
+            appState.wasConnected = appState.isConnected;
             appState.isConnected = snap.val() === true;
-            UIElements.connectionStatus.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-            UIElements.connectionStatus.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
-            if (appState.isConnected && appState.currentUser) setupUserSession(appState.currentUser);
+            updateConnectionUI();
+            
+            if (!appState.wasConnected && appState.isConnected && appState.currentUser) {
+                Logger.info('Reconexión detectada. Resincronizando estado.');
+                resyncApplicationState();
+            }
+        }
+
+        function updateConnectionUI() {
+            const statusEl = UIElements.connectionStatus;
+            statusEl.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+            statusEl.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
+        }
+
+        async function resyncApplicationState() {
+            try {
+                await setupUserSession(appState.currentUser);
+                const queueSnap = await get(query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt')));
+                const activeUserSnap = await get(ref(appState.db, 'queueSystem/activeUser'));
+                const sortedQueue = [];
+                queueSnap.forEach(childSnap => sortedQueue.push(childSnap.val()));
+                appState.localQueue = sortedQueue;
+                appState.localActiveUser = activeUserSnap.val();
+                renderQueue();
+                handleActiveUserChange();
+            } catch (error) {
+                Logger.error('resyncApplicationState', error);
+            }
         }
 
         async function handleAuthStateChange(user) {
@@ -326,17 +385,33 @@
             else onUserLoggedOut();
         }
 
+        const Validator = {
+            isEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+            isPasswordStrong: (password) => password.length >= 6
+        };
+        
         async function handleLogin() {
-            if (appState.isLoggingIn) return;
+            setButtonLoading(UIElements.loginButton, true, 'Verificando...');
             const email = UIElements.emailInput.value.trim();
             const password = UIElements.passwordInput.value;
-            if (!email || !password) return showError('Ingresa correo y contraseña.');
-            setLoginButtonState(true, 'Verificando...');
+
+            if (!Validator.isEmail(email)) {
+                showError('Por favor, ingresa un correo electrónico válido.');
+                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
+                return;
+            }
+            if (!Validator.isPasswordStrong(password)) {
+                showError('La contraseña debe tener al menos 6 caracteres.');
+                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
+                return;
+            }
+
             try {
                 await signInWithEmailAndPassword(appState.auth, email, password);
             } catch (error) {
+                Logger.error('handleLogin', error, { email });
                 showError(getFriendlyAuthError(error.code));
-                setLoginButtonState(false);
+                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
             }
         }
 
@@ -349,23 +424,23 @@
                 UIElements.userName.textContent = user.email;
                 UIElements.loginModal.style.display = 'none';
                 UIElements.mainContainer.style.display = 'block';
-                setLoginButtonState(false);
+                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
                 setupAppListeners();
                 appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
             } catch (error) {
+                Logger.error('onUserLoggedIn', error, { userId: user.uid });
                 if (handleDatabaseError(error, 'onUserLoggedIn')) return;
             }
         }
         
         async function handleLogout() {
-            if (!appState.currentUser || UIElements.logoutBtn.disabled) return;
-            UIElements.logoutBtn.disabled = true;
+            setButtonLoading(UIElements.logoutBtn, true);
             cleanupAll();
             try {
                 await signOut(appState.auth);
             } catch (error) {
-                console.error("Error al cerrar sesión:", error);
-                UIElements.logoutBtn.disabled = false;
+                Logger.error('handleLogout', error);
+                setButtonLoading(UIElements.logoutBtn, false, 'Cerrar Sesión');
             }
         }
 
@@ -377,8 +452,7 @@
             UIElements.summaryPanel.style.display = 'none';
             UIElements.emailInput.value = '';
             UIElements.passwordInput.value = '';
-            UIElements.logoutBtn.disabled = false;
-            setLoginButtonState(false);
+            setButtonLoading(UIElements.logoutBtn, false, 'Cerrar Sesión');
             showError(null);
         }
         
@@ -394,21 +468,20 @@
         }
 
         function setupAppListeners() {
+            cleanupAllListeners();
             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
             
             const activeUserUnsubscribe = onValue(activeUserRef, (snap) => {
                 appState.localActiveUser = snap.val();
-                handleActiveUserChange(appState.localActiveUser);
+                handleActiveUserChange();
             }, (error) => handleDatabaseError(error, 'activeUserListener'));
             
             const queueUnsubscribe = onValue(queueRef, (snap) => {
                 const sortedQueue = [];
                 snap.forEach(childSnap => sortedQueue.push(childSnap.val()));
                 appState.localQueue = sortedQueue;
-                renderQueue(appState.localQueue);
-                // CORRECCIÓN: Se actualiza la UI de los botones después de redibujar la cola.
-                renderActiveUserUI(appState.localActiveUser);
+                renderQueue();
             }, (error) => handleDatabaseError(error, 'queueListener'));
 
             appState.listeners.push(activeUserUnsubscribe, queueUnsubscribe);
@@ -417,113 +490,125 @@
         async function joinQueue() {
             const { currentUser, isConnected } = appState;
             if (!isConnected || !currentUser || UIElements.joinQueueBtn.disabled) return;
-            UIElements.joinQueueBtn.disabled = true;
+            setButtonLoading(UIElements.joinQueueBtn, true, 'Uniéndose...');
             try {
                 await set(ref(appState.db, `queueSystem/queue/${currentUser.uid}`), { 
-                    userId: currentUser.uid, 
-                    email: currentUser.email, 
-                    joinedAt: serverTimestamp() 
+                    userId: currentUser.uid, email: currentUser.email, joinedAt: serverTimestamp() 
                 });
-                showNotification('Te uniste a la cola.', 'success');
-                promoteNextUser();
+                showQueueMessage('QUEUE_JOIN_SUCCESS', 'success');
+                await promoteNextUserWithRetry();
             } catch (error) {
-                showNotification('Error al unirte a la cola.', 'error');
+                showQueueMessage('QUEUE_JOIN_ERROR', 'error');
                 if (handleDatabaseError(error, 'joinQueue')) return;
+            } finally {
+                setButtonLoading(UIElements.joinQueueBtn, false, '📝 Unirse a la Cola');
             }
         }
         
-        async function promoteNextUser() {
+        async function promoteNextUserWithRetry(maxRetries = 3) {
             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
-            try {
-                const activeUserSnap = await get(activeUserRef);
-                if (activeUserSnap.exists()) return;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const activeUserSnap = await get(activeUserRef);
+                    if (activeUserSnap.exists()) return true;
 
-                const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
-                const queueSnap = await get(queueRef);
-                if (!queueSnap.exists()) return;
-
-                let nextInLine = null;
-                queueSnap.forEach(userSnap => {
-                    if (!nextInLine) nextInLine = userSnap.val();
-                });
-
-                if (nextInLine) {
-                    const sessionsSnap = await get(ref(appState.db, 'activeSessions'));
-                    const activeSessions = sessionsSnap.val() || {};
-                    if(activeSessions[nextInLine.userId]) {
-                        runTransaction(activeUserRef, (currentData) => {
+                    const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
+                    const queueSnap = await get(queueRef);
+                    if (!queueSnap.exists()) return true;
+                    
+                    let nextInLine = null;
+                    queueSnap.forEach(snap => { if(!nextInLine) nextInLine = snap.val() });
+                    
+                    if (nextInLine) {
+                        const result = await runTransaction(activeUserRef, (currentData) => {
                             if (currentData) return;
                             return {
                                 userId: nextInLine.userId, email: nextInLine.email, isPaused: false,
-                                remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(),
-                                pausesUsed: 0
+                                remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(), pausesUsed: 0
                             };
-                        }).then(({ committed }) => {
-                            if (committed) remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
                         });
-                    } else {
-                        await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
-                        promoteNextUser();
+                        
+                        if (result.committed) {
+                            Logger.info(`Usuario ${nextInLine.email} promovido.`);
+                            await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
+                            return true;
+                        }
                     }
+                    return true;
+                } catch (error) {
+                    Logger.error('promoteUserWithRetry', error, { attempt: i + 1 });
+                    if (i === maxRetries - 1) {
+                        showError('No se pudo promover al siguiente usuario. Inténtalo de nuevo.');
+                        throw error;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500 * (i + 1)));
                 }
-            } catch (error) {
-                if (!error.message.includes('disconnect')) console.error("Error al promover usuario:", error);
             }
+            return false;
         }
         
-        function handleActiveUserChange(activeUserData) {
-            clearInterval(appState.timers.activeUserTimerInterval);
+        function handleActiveUserChange() {
+            cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
             clearInterval(appState.timers.autoResumeTimer);
             stopTitleNotification();
-            renderActiveUserUI(activeUserData);
+            renderActiveUserUI();
             updateSummaryPanel();
 
-            if (activeUserData) {
-                if (activeUserData.isPaused) {
-                    updateTimerDisplayUI(activeUserData.remainingTime);
-                    if(activeUserData.userId === appState.currentUser?.uid) {
-                        appState.timers.autoResumeTimer = setTimeout(() => {
-                            toggleTimerPause(false);
-                            showNotification("El tiempo de pausa ha terminado.", "warning");
-                        }, MAX_PAUSE_DURATION_SECONDS * 1000);
-                    }
-                } else {
-                    appState.timers.activeUserTimerInterval = setInterval(() => {
-                        const serverNow = Date.now() + appState.serverTimeOffset;
-                        const elapsed = Math.floor((serverNow - (activeUserData.lastUpdated || serverNow)) / 1000);
-                        const remaining = activeUserData.remainingTime - elapsed;
-                        updateTimerDisplayUI(remaining);
-                        updateSummaryPanel();
-
-                        if (remaining <= 0) {
-                            clearInterval(appState.timers.activeUserTimerInterval);
-                            runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
-                                return (currentData && currentData.userId === activeUserData.userId) ? null : undefined; 
-                            }).then(({ committed }) => {
-                                if (committed) promoteNextUser();
-                            });
-                        }
-                    }, 1000);
-                }
-                const timeSinceUpdate = (Date.now() + appState.serverTimeOffset) - (activeUserData.lastUpdated || 0);
-                if (activeUserData.userId === appState.currentUser?.uid && timeSinceUpdate < 5000 && !activeUserData.isPaused) {
-                   showTurnNotification();
-                }
+            const activeUserData = appState.localActiveUser;
+            if (activeUserData && !activeUserData.isPaused) {
+                startOptimizedTimer(activeUserData);
+            } else if (activeUserData && activeUserData.isPaused) {
+                 updateTimerDisplayUI(activeUserData.remainingTime);
+                 if(activeUserData.userId === appState.currentUser?.uid) {
+                    appState.timers.autoResumeTimer = setTimeout(() => {
+                        toggleTimerPause(false);
+                        showNotification(MESSAGES.PAUSE_TIME_EXPIRED, "warning");
+                    }, MAX_PAUSE_DURATION_SECONDS * 1000);
+                 }
             } else {
                 updateTimerDisplayUI(TURN_TIME_SECONDS);
-                if (appState.currentUser) promoteNextUser();
+                if (appState.currentUser) promoteNextUserWithRetry();
             }
         }
         
+        function startOptimizedTimer(activeUserData) {
+            let lastUpdate = 0;
+            function timerLoop(timestamp) {
+                if (!appState.timers.activeUserAnimationFrame) return;
+                
+                if (!lastUpdate || timestamp - lastUpdate >= 1000) {
+                    const serverNow = Date.now() + appState.serverTimeOffset;
+                    const elapsed = Math.floor((serverNow - (activeUserData.lastUpdated || serverNow)) / 1000);
+                    const remaining = activeUserData.remainingTime - elapsed;
+                    
+                    updateTimerDisplayUI(remaining);
+                    updateSummaryPanel();
+                    lastUpdate = timestamp;
+
+                    if (remaining <= 0) {
+                        cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
+                        runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
+                            return (currentData && currentData.userId === activeUserData.userId) ? null : undefined; 
+                        }).then(({ committed }) => {
+                            if (committed) promoteNextUserWithRetry();
+                        });
+                        return;
+                    }
+                }
+                appState.timers.activeUserAnimationFrame = requestAnimationFrame(timerLoop);
+            }
+            appState.timers.activeUserAnimationFrame = requestAnimationFrame(timerLoop);
+        }
+
         async function toggleTimerPause(shouldPause) {
-             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
+            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             try {
                 await runTransaction(activeUserRef, (currentData) => {
                     if (!currentData || currentData.userId !== appState.currentUser?.uid || currentData.isPaused === shouldPause) return;
                     const updates = { ...currentData, isPaused: shouldPause };
                     if (shouldPause) {
                         if ((currentData.pausesUsed || 0) >= MAX_PAUSES_PER_TURN) {
-                            showNotification("Has alcanzado el límite de pausas para este turno.", "error"); return;
+                            showNotification(MESSAGES.PAUSE_LIMIT_REACHED, "error"); return;
                         }
                         const elapsed = Math.floor(((Date.now() + appState.serverTimeOffset) - currentData.lastUpdated) / 1000);
                         updates.remainingTime = Math.max(0, currentData.remainingTime - elapsed);
@@ -545,29 +630,38 @@
         }
 
         async function cleanupStaleUsers() {
+            Logger.info('Ejecutando limpieza de usuarios obsoletos...');
             try {
-                const [queueSnap, sessionsSnap, activeUserSnap] = await Promise.all([
-                    get(ref(appState.db, 'queueSystem/queue')), get(ref(appState.db, 'activeSessions')),
-                    get(ref(appState.db, 'queueSystem/activeUser'))
-                ]);
-                const activeSessions = sessionsSnap.val() || {};
+                const cutoffTime = Date.now() - SESSION_TIMEOUT_MS;
                 const updates = {};
-                let needsPromotion = false;
-                if (activeUserSnap.exists() && !activeSessions[activeUserSnap.val().userId]) {
-                    updates['queueSystem/activeUser'] = null;
-                    needsPromotion = true;
+                
+                const sessionsRef = ref(appState.db, 'activeSessions');
+                const sessionsSnap = await get(sessionsRef);
+                if (!sessionsSnap.exists()) return;
+
+                sessionsSnap.forEach(sessionSnap => {
+                    const session = sessionSnap.val();
+                    const lastHeartbeat = session.lastHeartbeat || 0;
+                    if (lastHeartbeat < cutoffTime) {
+                        Logger.info(`Marcando sesión obsoleta para eliminar: ${session.email}`);
+                        updates[`activeSessions/${sessionSnap.key}`] = null;
+                        
+                        // También buscar y eliminar de la cola si existe
+                        updates[`queueSystem/queue/${sessionSnap.key}`] = null;
+                    }
+                });
+
+                if (Object.keys(updates).length > 0) {
+                    await update(ref(appState.db), updates);
+                    Logger.info(`${Object.keys(updates).length / 2} sesiones obsoletas eliminadas.`);
                 }
-                if (queueSnap.exists()) {
-                    queueSnap.forEach((userSnap) => {
-                        if (!activeSessions[userSnap.key]) updates[`queueSystem/queue/${userSnap.key}`] = null;
-                    });
-                }
-                if (Object.keys(updates).length > 0) await update(ref(appState.db), updates);
-                if (needsPromotion) promoteNextUser();
-            } catch (error) { if (handleDatabaseError(error, 'cleanupStaleUsers')) return; }
+            } catch(error) {
+                Logger.error('cleanupStaleUsers', error);
+            }
         }
 
-        function renderQueue(sortedQueueArray) {
+        function renderQueue() {
+            const sortedQueueArray = appState.localQueue;
             const body = UIElements.queueListBody;
             body.innerHTML = '';
             UIElements.queueCount.textContent = sortedQueueArray.length;
@@ -575,32 +669,48 @@
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
             } else {
                 sortedQueueArray.forEach((q, index) => {
-                    const tr = document.createElement('tr');
-                    const isCurrentUser = appState.currentUser?.uid === q?.userId;
-                    if (isCurrentUser) tr.className = 'current-user';
-                    const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
-                    const joinedTime = typeof q?.joinedAt === 'number' ? new Date(q.joinedAt).toLocaleTimeString('es-DO') : '...';
-                    tr.innerHTML = `<td>${index + 1}</td><td>${q?.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
-                    body.appendChild(tr);
+                    const tr = createQueueRow(q, index);
+                    if (tr) body.appendChild(tr);
                 });
             }
-            // CORRECCIÓN: La lógica del botón se mueve aquí para asegurar que se ejecute después de renderizar la cola.
-            const isUserInQueue = sortedQueueArray.some(user => user.userId === appState.currentUser?.uid);
+            updateJoinButtonState();
+        }
+
+        function createQueueRow(queueItem, index) {
+            if (!queueItem || !queueItem.userId) return null;
+            const tr = document.createElement('tr');
+            tr.dataset.key = queueItem.userId;
+            const isCurrentUser = appState.currentUser?.uid === queueItem.userId;
+            if (isCurrentUser) tr.className = 'current-user';
+            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.userId}">Salir</button>` : 'En espera';
+            const joinedTime = typeof queueItem.joinedAt === 'number' ? new Date(queueItem.joinedAt).toLocaleTimeString('es-DO') : '...';
+            tr.innerHTML = `<td>${index + 1}</td><td>${queueItem.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
+            return tr;
+        }
+
+        function updateJoinButtonState() {
+            const isUserInQueue = appState.localQueue.some(user => user.userId === appState.currentUser?.uid);
             const isUserActive = appState.localActiveUser?.userId === appState.currentUser?.uid;
             UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
         
-        function renderActiveUserUI(data) {
+        function renderActiveUserUI() {
+            const data = appState.localActiveUser;
             UIElements.activeUserInfo.innerHTML = data ? `<b>${data.email}</b>` : 'Nadie activo';
             UIElements.pauseInfo.innerHTML = '';
+            updateJoinButtonState();
+
             if (data?.userId === appState.currentUser?.uid) {
                 const pausesUsed = data.pausesUsed || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
+                const isPaused = data.isPaused || false;
+
                 UIElements.timerControls.innerHTML = `
-                    <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg ...>Pausar</svg></button>
-                    <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><svg ...>Reanudar</svg></button>
-                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn"><svg ...>Ceder Turno</svg></button>`;
-                if (data.isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
+                    <button id="pauseTimerBtn" class="timer-btn" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
+                    <button id="resumeTimerBtn" class="timer-btn" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
+                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>Ceder Turno</button>`;
+                
+                if(isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
             } else {
                 UIElements.timerControls.innerHTML = data?.isPaused ? '<i>Turno en pausa</i>' : '';
@@ -638,8 +748,15 @@
         }
 
         function cleanupAll() {
-            Object.values(appState.timers).forEach(timerId => clearInterval(timerId));
+            Object.values(appState.timers).forEach(timerId => {
+                clearInterval(timerId);
+                cancelAnimationFrame(timerId);
+            });
             appState.timers = {};
+            cleanupAllListeners();
+        }
+
+        function cleanupAllListeners() {
             appState.listeners.forEach(unsubscribe => unsubscribe());
             appState.listeners = [];
         }
@@ -648,7 +765,7 @@
             clearInterval(appState.timers.heartbeat);
             appState.timers.heartbeat = setInterval(() => {
                 if (appState.currentUser && appState.isConnected) {
-                    set(ref(appState.db, `activeSessions/${appState.currentUser.uid}/lastHeartbeat`), serverTimestamp()).catch(error => handleDatabaseError(error, 'heartbeat'));
+                    set(ref(appState.db, `activeSessions/${appState.currentUser.uid}/lastHeartbeat`), serverTimestamp()).catch(error => Logger.error('heartbeat', error));
                 }
             }, HEARTBEAT_INTERVAL_MS);
         }
@@ -664,11 +781,13 @@
             e.preventDefault();
             const email = UIElements.emailInput.value.trim();
             if (!email) { showError("Ingresa tu correo para restablecer la contraseña."); return; }
+            setButtonLoading(e.target, true);
             try {
                 await sendPasswordResetEmail(appState.auth, email);
                 showNotification(`Se ha enviado un enlace a ${email}`, 'success');
                 showError(null);
             } catch (error) { showError(getFriendlyAuthError(error.code)); }
+            finally { setButtonLoading(e.target, false); }
         }
         
         function getFriendlyAuthError(errorCode) {
@@ -679,15 +798,23 @@
             return errors[errorCode] || 'Ocurrió un error. Por favor, inténtalo de nuevo.';
         }
         
-        function setLoginButtonState(isLoading, text = 'Iniciar Sesión') {
-            appState.isLoggingIn = isLoading;
-            UIElements.loginButton.disabled = isLoading;
-            UIElements.loginButtonText.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${text}` : text;
+        function setButtonLoading(button, isLoading, loadingText = '') {
+            if (!button) return;
+            const originalText = button.dataset.originalText || button.textContent;
+            if (!button.dataset.originalText) {
+                button.dataset.originalText = originalText;
+            }
+            button.disabled = isLoading;
+            button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
 
         function showError(message) {
             UIElements.userError.style.display = message ? 'block' : 'none';
             UIElements.userError.textContent = message;
+        }
+        
+        function showQueueMessage(key, type = 'success') {
+            showNotification(MESSAGES[key], type);
         }
 
         function showNotification(message, type = 'success') {
@@ -698,7 +825,7 @@
         }
 
         function showTurnNotification() {
-            showNotification('¡Es tu turno!', 'success');
+            showNotification(MESSAGES.TURN_NOTIFICATION, 'success');
             if (Notification.permission === "granted") {
                 new Notification("Sistema de Turnos", { body: `¡Es tu turno! Tienes ${TURN_TIME_SECONDS/60} minutos.`});
             }
@@ -727,7 +854,7 @@
         }
 
         function handleDatabaseError(error, context) {
-            console.error(`Error de BD en ${context}:`, error);
+            Logger.error(context, error);
             if (error.message?.toUpperCase().includes('PERMISSION_DENIED')) {
                 showErrorScreen(`<b>Error de Permiso:</b> La aplicación no tiene permiso para realizar esta acción.`);
                 return true; 
