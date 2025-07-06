@@ -227,7 +227,7 @@
         import { getDatabase, ref, onValue, set, get, remove, onDisconnect, serverTimestamp, runTransaction, query, orderByChild, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-        // 1. SEGURIDAD: SIMULACIÓN DE VARIABLES DE ENTORNO
+        // --- 1. SEGURIDAD: SIMULACIÓN DE VARIABLES DE ENTORNO ---
         const process = {
             env: {
                 VITE_FIREBASE_API_KEY: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
@@ -252,7 +252,6 @@
             measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID
         };
         
-        // --- CONSTANTES DE CONFIGURACIÓN Y ESTADO ---
         const TURN_TIME_SECONDS = 15 * 60;
         const MAX_PAUSE_DURATION_SECONDS = 30;
         const MAX_PAUSES_PER_TURN = 2;
@@ -268,12 +267,8 @@
         };
         
         const Logger = {
-            error: (context, error, metadata = {}) => {
-                console.error(`[${new Date().toISOString()}] CONTEXT: ${context} | ERROR:`, error, "| METADATA:", metadata);
-            },
-            info: (message, metadata = {}) => {
-                console.info(`[${new Date().toISOString()}] INFO: ${message}`, metadata);
-            }
+            error: (context, error, metadata = {}) => console.error(`[${new Date().toISOString()}] CONTEXT: ${context} | ERROR:`, error, "| METADATA:", metadata),
+            info: (message, metadata = {}) => console.info(`[${new Date().toISOString()}] INFO: ${message}`, metadata)
         };
 
         const appState = {
@@ -334,7 +329,7 @@
                     e.target.disabled = true;
                     try {
                         await remove(ref(appState.db, `queueSystem/queue/${key}`));
-                        showNotification(MESSAGES.QUEUE_LEAVE_SUCCESS, 'success');
+                        showQueueMessage('QUEUE_LEAVE_SUCCESS', 'success');
                     } catch (err) { if(handleDatabaseError(err, 'leaveQueueFromList')) return; }
                 }
             });
@@ -491,6 +486,14 @@
             const { currentUser, isConnected } = appState;
             if (!isConnected || !currentUser || UIElements.joinQueueBtn.disabled) return;
             setButtonLoading(UIElements.joinQueueBtn, true, 'Uniéndose...');
+
+            // Validar que el usuario no esté activo
+            if (appState.localActiveUser?.userId === currentUser.uid) {
+                showNotification("Ya tienes un turno activo.", "warning");
+                setButtonLoading(UIElements.joinQueueBtn, false, '📝 Unirse a la Cola');
+                return;
+            }
+
             try {
                 await set(ref(appState.db, `queueSystem/queue/${currentUser.uid}`), { 
                     userId: currentUser.uid, email: currentUser.email, joinedAt: serverTimestamp() 
@@ -506,20 +509,22 @@
         }
         
         async function promoteNextUserWithRetry(maxRetries = 3) {
-            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             for (let i = 0; i < maxRetries; i++) {
                 try {
-                    const activeUserSnap = await get(activeUserRef);
-                    if (activeUserSnap.exists()) return true;
-
+                    const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
                     const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
-                    const queueSnap = await get(queueRef);
+                    const [activeUserSnap, queueSnap, sessionsSnap] = await Promise.all([
+                        get(activeUserRef), get(queueRef), get(ref(appState.db, 'activeSessions'))
+                    ]);
+
+                    if (activeUserSnap.exists()) return true;
                     if (!queueSnap.exists()) return true;
                     
+                    const activeSessions = sessionsSnap.val() || {};
                     let nextInLine = null;
                     queueSnap.forEach(snap => { if(!nextInLine) nextInLine = snap.val() });
                     
-                    if (nextInLine) {
+                    if (nextInLine && activeSessions[nextInLine.userId]) {
                         const result = await runTransaction(activeUserRef, (currentData) => {
                             if (currentData) return;
                             return {
@@ -531,8 +536,12 @@
                         if (result.committed) {
                             Logger.info(`Usuario ${nextInLine.email} promovido.`);
                             await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
-                            return true;
                         }
+                    } else if (nextInLine) {
+                        Logger.info(`El siguiente usuario en cola (${nextInLine.email}) no está conectado. Eliminando de la cola.`);
+                        await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
+                        // Continuar el bucle para intentar con el siguiente
+                        continue;
                     }
                     return true;
                 } catch (error) {
@@ -574,7 +583,7 @@
         function startOptimizedTimer(activeUserData) {
             let lastUpdate = 0;
             function timerLoop(timestamp) {
-                if (!appState.timers.activeUserAnimationFrame) return;
+                if (appState.timers.activeUserAnimationFrame === null) return;
                 
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
                     const serverNow = Date.now() + appState.serverTimeOffset;
@@ -587,6 +596,7 @@
 
                     if (remaining <= 0) {
                         cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
+                        appState.timers.activeUserAnimationFrame = null;
                         runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
                             return (currentData && currentData.userId === activeUserData.userId) ? null : undefined; 
                         }).then(({ committed }) => {
@@ -623,6 +633,7 @@
         }
 
         async function leaveTurn() {
+            setButtonLoading(document.getElementById('leaveTurnBtn'), true);
             if (appState.currentUser) {
                 showNotification("Has cedido tu turno.", "warning");
                 await remove(ref(appState.db, `queueSystem/activeUser`));
@@ -645,8 +656,6 @@
                     if (lastHeartbeat < cutoffTime) {
                         Logger.info(`Marcando sesión obsoleta para eliminar: ${session.email}`);
                         updates[`activeSessions/${sessionSnap.key}`] = null;
-                        
-                        // También buscar y eliminar de la cola si existe
                         updates[`queueSystem/queue/${sessionSnap.key}`] = null;
                     }
                 });
@@ -663,15 +672,18 @@
         function renderQueue() {
             const sortedQueueArray = appState.localQueue;
             const body = UIElements.queueListBody;
-            body.innerHTML = '';
+            const fragment = document.createDocumentFragment();
             UIElements.queueCount.textContent = sortedQueueArray.length;
+
             if (sortedQueueArray.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
             } else {
                 sortedQueueArray.forEach((q, index) => {
                     const tr = createQueueRow(q, index);
-                    if (tr) body.appendChild(tr);
+                    if (tr) fragment.appendChild(tr);
                 });
+                body.innerHTML = '';
+                body.appendChild(fragment);
             }
             updateJoinButtonState();
         }
@@ -706,9 +718,9 @@
                 const isPaused = data.isPaused || false;
 
                 UIElements.timerControls.innerHTML = `
-                    <button id="pauseTimerBtn" class="timer-btn" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
-                    <button id="resumeTimerBtn" class="timer-btn" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
-                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>Ceder Turno</button>`;
+                    <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
+                    <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
+                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn" data-original-text="Ceder Turno"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>Ceder Turno</button>`;
                 
                 if(isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
@@ -801,9 +813,7 @@
         function setButtonLoading(button, isLoading, loadingText = '') {
             if (!button) return;
             const originalText = button.dataset.originalText || button.textContent;
-            if (!button.dataset.originalText) {
-                button.dataset.originalText = originalText;
-            }
+            if (!button.dataset.originalText) button.dataset.originalText = originalText;
             button.disabled = isLoading;
             button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
