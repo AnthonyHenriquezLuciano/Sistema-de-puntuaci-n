@@ -351,8 +351,15 @@
                 await setupUserSession(appState.currentUser);
                 const queueSnap = await get(query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt')));
                 const activeUserSnap = await get(ref(appState.db, 'queueSystem/activeUser'));
+                
                 const sortedQueue = [];
-                queueSnap.forEach(childSnap => sortedQueue.push(childSnap.val()));
+                // CORRECCIÓN 1: Capturar la 'key' del snapshot.
+                queueSnap.forEach(childSnap => {
+                    const userData = childSnap.val();
+                    userData.key = childSnap.key; 
+                    sortedQueue.push(userData);
+                });
+
                 appState.localQueue = sortedQueue;
                 appState.localActiveUser = activeUserSnap.val();
                 renderQueue();
@@ -459,9 +466,14 @@
                 handleActiveUserChange();
             }, (error) => handleDatabaseError(error, 'activeUserListener'));
             
+            // CORRECCIÓN 1: Capturar la 'key' del snapshot para cada usuario en la cola.
             const queueUnsubscribe = onValue(queueRef, (snap) => {
                 const sortedQueue = [];
-                snap.forEach(childSnap => sortedQueue.push(childSnap.val()));
+                snap.forEach(childSnap => {
+                    const userData = childSnap.val();
+                    userData.key = childSnap.key; // ¡Aquí está la magia!
+                    sortedQueue.push(userData);
+                });
                 appState.localQueue = sortedQueue;
                 renderQueue();
             }, (error) => handleDatabaseError(error, 'queueListener'));
@@ -508,9 +520,21 @@
                     
                     const activeSessions = sessionsSnap.val() || {};
                     let nextInLine = null;
-                    queueSnap.forEach(snap => { if(!nextInLine) nextInLine = snap.val() });
                     
-                    if (nextInLine && activeSessions[nextInLine.userId]) {
+                    const queueArray = [];
+                    queueSnap.forEach(snap => queueArray.push(snap.val()));
+
+                    for (const user of queueArray) {
+                        if (activeSessions[user.userId]) {
+                            nextInLine = user;
+                            break;
+                        } else {
+                            Logger.info(`El siguiente usuario en cola (${user.email}) no está conectado. Eliminando.`);
+                            await remove(ref(appState.db, `queueSystem/queue/${user.userId}`));
+                        }
+                    }
+                    
+                    if (nextInLine) {
                         const result = await runTransaction(activeUserRef, (currentData) => {
                             if (currentData) return;
                             return {
@@ -523,10 +547,6 @@
                             Logger.info(`Usuario ${nextInLine.email} promovido.`);
                             await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
                         }
-                    } else if (nextInLine) {
-                        Logger.info(`El siguiente usuario en cola (${nextInLine.email}) no está conectado. Eliminando de la cola.`);
-                        await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
-                        continue;
                     }
                     return true;
                 } catch (error) {
@@ -543,6 +563,7 @@
         
         function handleActiveUserChange() {
             cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
+            appState.timers.activeUserAnimationFrame = null;
             clearInterval(appState.timers.autoResumeTimer);
             stopTitleNotification();
             renderActiveUserUI();
@@ -647,7 +668,6 @@
 
                 if (Object.keys(updates).length > 0) {
                     await update(ref(appState.db), updates);
-                    Logger.info(`${Object.keys(updates).length / 2} sesiones obsoletas eliminadas.`);
                 }
             } catch(error) {
                 Logger.error('cleanupStaleUsers', error);
@@ -657,29 +677,27 @@
         function renderQueue() {
             const sortedQueueArray = appState.localQueue;
             const body = UIElements.queueListBody;
-            const fragment = document.createDocumentFragment();
+            body.innerHTML = '';
             UIElements.queueCount.textContent = sortedQueueArray.length;
-
             if (sortedQueueArray.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
             } else {
                 sortedQueueArray.forEach((q, index) => {
                     const tr = createQueueRow(q, index);
-                    if (tr) fragment.appendChild(tr);
+                    if (tr) body.appendChild(tr);
                 });
-                body.innerHTML = '';
-                body.appendChild(fragment);
             }
             updateJoinButtonState();
         }
 
+        // CORRECCIÓN 2: Actualizar `createQueueRow` para usar la `key` capturada.
         function createQueueRow(queueItem, index) {
             if (!queueItem || !queueItem.userId) return null;
             const tr = document.createElement('tr');
-            tr.dataset.key = queueItem.userId;
+            tr.dataset.key = queueItem.key || queueItem.userId;
             const isCurrentUser = appState.currentUser?.uid === queueItem.userId;
             if (isCurrentUser) tr.className = 'current-user';
-            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.userId}">Salir</button>` : 'En espera';
+            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.key || queueItem.userId}">Salir</button>` : 'En espera';
             const joinedTime = typeof queueItem.joinedAt === 'number' ? new Date(queueItem.joinedAt).toLocaleTimeString('es-DO') : '...';
             tr.innerHTML = `<td>${index + 1}</td><td>${queueItem.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
             return tr;
@@ -702,7 +720,6 @@
                 const pausesUsed = data.pausesUsed || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 const isPaused = data.isPaused || false;
-
                 UIElements.timerControls.innerHTML = `
                     <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
                     <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
