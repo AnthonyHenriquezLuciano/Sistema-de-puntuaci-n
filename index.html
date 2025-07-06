@@ -371,7 +371,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
         import { getDatabase, ref, onValue, set, get, remove, onDisconnect, serverTimestamp, runTransaction, query, orderByChild, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-        // CAMBIO 1: Importar inMemoryPersistence
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -480,7 +479,6 @@
             if (!email || !password) return showError('Ingresa correo y contraseña.');
             setLoginButtonState(true, 'Verificando...');
             try {
-                // CAMBIO 2: Usar persistencia en memoria para que la sesión no se comparta entre pestañas.
                 await setPersistence(appState.auth, inMemoryPersistence);
                 await signInWithEmailAndPassword(appState.auth, email, password);
             } catch (error) {
@@ -578,9 +576,8 @@
                 promoteNextUser();
             } catch (error) {
                 showNotification('Error al unirte a la cola.', 'error');
+                UIElements.joinQueueBtn.disabled = false; // Re-enable on error
                 if (handleDatabaseError(error, 'joinQueue')) return;
-            } finally {
-                UIElements.joinQueueBtn.disabled = false;
             }
         }
         
@@ -731,11 +728,22 @@
                 return;
             }
             sortedQueueArray.forEach((q, index) => {
-                const tr = document.createElement('tr');
-                if (appState.currentUser?.uid === q.userId) tr.classList.add('current-user');
-                const actionCell = appState.currentUser?.uid === q.userId ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
-                tr.innerHTML = `<td>${index + 1}</td><td>${q.email}</td><td>${q.joinedAt ? new Date(q.joinedAt).toLocaleTimeString('es-DO') : '...'}</td><td>${actionCell}</td>`;
-                body.appendChild(tr);
+                // CORRECCIÓN: Manejo robusto de la fecha para evitar errores de renderizado.
+                try {
+                    const tr = document.createElement('tr');
+                    if (appState.currentUser?.uid === q.userId) tr.classList.add('current-user');
+                    
+                    const actionCell = appState.currentUser?.uid === q.userId ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
+                    
+                    const joinedTime = typeof q.joinedAt === 'number'
+                        ? new Date(q.joinedAt).toLocaleTimeString('es-DO')
+                        : '...';
+
+                    tr.innerHTML = `<td>${index + 1}</td><td>${q.email}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
+                    body.appendChild(tr);
+                } catch(e) {
+                    console.error("Error al renderizar una fila de la cola:", q, e);
+                }
             });
         }
         
