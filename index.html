@@ -271,11 +271,17 @@
 
         document.addEventListener('DOMContentLoaded', startApp);
         
-        function startApp() {
+        // CORRECCIÓN: La función `startApp` ahora es `async` para usar `await`
+        async function startApp() {
             try {
                 appState.firebaseApp = initializeApp(firebaseConfig);
                 appState.auth = getAuth(appState.firebaseApp);
                 appState.db = getDatabase(appState.firebaseApp);
+
+                // CORRECCIÓN: La persistencia se establece UNA SOLA VEZ al iniciar la app.
+                // Esto soluciona el problema del botón de login que no funcionaba.
+                await setPersistence(appState.auth, inMemoryPersistence);
+
                 addEventListeners();
                 startPageClock();
                 requestNotificationPermission();
@@ -333,8 +339,7 @@
             if (!email || !password) return showError('Ingresa correo y contraseña.');
             setLoginButtonState(true, 'Verificando...');
             try {
-                // Usar persistencia en memoria para que la sesión no se comparta entre pestañas.
-                await setPersistence(appState.auth, inMemoryPersistence);
+                // CORRECCIÓN: La llamada a setPersistence se ha movido a startApp.
                 await signInWithEmailAndPassword(appState.auth, email, password);
             } catch (error) {
                 showError(getFriendlyAuthError(error.code));
@@ -354,8 +359,6 @@
                 setLoginButtonState(false);
                 setupAppListeners();
                 appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
-                // CORRECCIÓN: El temporizador del resumen se unifica con el del turno principal.
-                // Ya no se inicia un intervalo separado aquí.
             } catch (error) {
                 if (handleDatabaseError(error, 'onUserLoggedIn')) return;
             }
@@ -431,9 +434,9 @@
                 promoteNextUser();
             } catch (error) {
                 showNotification('Error al unirte a la cola.', 'error');
+                UIElements.joinQueueBtn.disabled = false;
                 if (handleDatabaseError(error, 'joinQueue')) return;
             }
-            // El estado del botón ahora se gestiona de forma declarativa por las funciones de renderizado.
         }
         
         async function promoteNextUser() {
@@ -479,7 +482,6 @@
             if (activeUserData) {
                 if (activeUserData.isPaused) {
                     updateTimerDisplayUI(activeUserData.remainingTime);
-                    // Actualizar el resumen incluso en pausa
                     updateSummaryPanel(); 
                     if(activeUserData.userId === appState.currentUser?.uid) {
                         appState.timers.autoResumeTimer = setTimeout(() => {
@@ -494,7 +496,6 @@
                         const remaining = activeUserData.remainingTime - elapsed;
                         
                         updateTimerDisplayUI(remaining);
-                        // CORRECCIÓN: Actualizar el resumen cada segundo desde el temporizador principal
                         updateSummaryPanel();
 
                         if (remaining <= 0) {
@@ -520,27 +521,6 @@
             }
         }
         
-        async function toggleTimerPause(shouldPause) { /* ... (Sin cambios) ... */ }
-        async function leaveTurn() { /* ... (Sin cambios) ... */ }
-        async function cleanupStaleUsers() { /* ... (Sin cambios) ... */ }
-        function renderActiveUserUI(data) { /* ... (Sin cambios) ... */ }
-        function updateTimerDisplayUI(seconds) { /* ... (Sin cambios) ... */ }
-        function cleanupAll() { /* ... (Sin cambios) ... */ }
-        function startHeartbeat() { /* ... (Sin cambios) ... */ }
-        function startPageClock() { /* ... (Sin cambios) ... */ }
-        async function handleForgotPassword(e) { /* ... (Sin cambios) ... */ }
-        function getFriendlyAuthError(errorCode) { /* ... (Sin cambios) ... */ }
-        function setLoginButtonState(isLoading, text = 'Iniciar Sesión') { /* ... (Sin cambios) ... */ }
-        function showError(message) { /* ... (Sin cambios) ... */ }
-        function showNotification(message, type) { /* ... (Sin cambios) ... */ }
-        function showTurnNotification() { /* ... (Sin cambios) ... */ }
-        function stopTitleNotification() { /* ... (Sin cambios) ... */ }
-        function requestNotificationPermission() { /* ... (Sin cambios) ... */ }
-        function showErrorScreen(message) { /* ... (Sin cambios) ... */ }
-        function handleDatabaseError(error, context) { /* ... (Sin cambios) ... */ }
-
-        // --- SE RE-IMPLEMENTAN FUNCIONES CLAVE ---
-
         async function toggleTimerPause(shouldPause) {
             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             try {
@@ -574,7 +554,7 @@
                 await remove(ref(appState.db, `queueSystem/activeUser`));
             }
         }
-        
+
         async function cleanupStaleUsers() {
             try {
                 const [queueSnap, sessionsSnap, activeUserSnap] = await Promise.all([
@@ -601,15 +581,14 @@
             }
         }
 
-        // CORRECCIÓN: Se re-escribe renderQueue para ser más robusta y evitar el error de renderizado.
         function renderQueue(sortedQueueArray) {
             const body = UIElements.queueListBody;
+            body.innerHTML = '';
             UIElements.queueCount.textContent = sortedQueueArray.length;
             if (sortedQueueArray.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
                 return;
             }
-            
             const rowsHtml = sortedQueueArray.map((q, index) => {
                 try {
                     const isCurrentUser = appState.currentUser?.uid === q.userId;
@@ -627,7 +606,7 @@
                             </tr>`;
                 } catch(e) {
                     console.error("Error al procesar una fila de la cola:", q, e);
-                    return ''; // Devuelve una fila vacía si hay un error para no romper el renderizado.
+                    return '';
                 }
             }).join('');
             
@@ -644,13 +623,16 @@
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 UIElements.timerControls.innerHTML = `
                     <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused || pausesLeft <= 0 ? 'disabled' : ''}>
-                        <svg ...>...</svg>Pausar
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>
+                        Pausar
                     </button>
                     <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}>
-                        <svg ...>...</svg>Reanudar
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                        Reanudar
                     </button>
                     <button id="leaveTurnBtn" class="timer-btn leave-turn-btn">
-                       <svg ...>...</svg>Ceder Turno
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
+                        Ceder Turno
                     </button>`;
                 if(data.isPaused){
                     UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
