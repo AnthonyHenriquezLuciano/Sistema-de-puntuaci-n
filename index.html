@@ -407,7 +407,8 @@
                 snap.forEach(childSnap => sortedQueue.push(childSnap.val()));
                 appState.localQueue = sortedQueue;
                 renderQueue(appState.localQueue);
-                renderActiveUserUI(appState.localActiveUser); // CORRECCIÓN: Actualizar botones después de la cola.
+                // CORRECCIÓN: Se actualiza la UI de los botones después de redibujar la cola.
+                renderActiveUserUI(appState.localActiveUser);
             }, (error) => handleDatabaseError(error, 'queueListener'));
 
             appState.listeners.push(activeUserUnsubscribe, queueUnsubscribe);
@@ -450,17 +451,17 @@
                     const sessionsSnap = await get(ref(appState.db, 'activeSessions'));
                     const activeSessions = sessionsSnap.val() || {};
                     if(activeSessions[nextInLine.userId]) {
-                        const { committed } = await runTransaction(activeUserRef, (currentData) => {
+                        runTransaction(activeUserRef, (currentData) => {
                             if (currentData) return;
                             return {
                                 userId: nextInLine.userId, email: nextInLine.email, isPaused: false,
                                 remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(),
                                 pausesUsed: 0
                             };
+                        }).then(({ committed }) => {
+                            if (committed) remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
                         });
-                        if (committed) await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
                     } else {
-                        // El siguiente usuario no está conectado, lo eliminamos y volvemos a intentar.
                         await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
                         promoteNextUser();
                     }
@@ -483,7 +484,7 @@
                     if(activeUserData.userId === appState.currentUser?.uid) {
                         appState.timers.autoResumeTimer = setTimeout(() => {
                             toggleTimerPause(false);
-                            showNotification("El tiempo de pausa ha terminado. Tu turno se ha reanudado.", "warning");
+                            showNotification("El tiempo de pausa ha terminado.", "warning");
                         }, MAX_PAUSE_DURATION_SECONDS * 1000);
                     }
                 } else {
@@ -491,7 +492,6 @@
                         const serverNow = Date.now() + appState.serverTimeOffset;
                         const elapsed = Math.floor((serverNow - (activeUserData.lastUpdated || serverNow)) / 1000);
                         const remaining = activeUserData.remainingTime - elapsed;
-                        
                         updateTimerDisplayUI(remaining);
                         updateSummaryPanel();
 
@@ -516,7 +516,7 @@
         }
         
         async function toggleTimerPause(shouldPause) {
-            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
+             const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
             try {
                 await runTransaction(activeUserRef, (currentData) => {
                     if (!currentData || currentData.userId !== appState.currentUser?.uid || currentData.isPaused === shouldPause) return;
@@ -573,33 +573,34 @@
             UIElements.queueCount.textContent = sortedQueueArray.length;
             if (sortedQueueArray.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
-                return;
+            } else {
+                sortedQueueArray.forEach((q, index) => {
+                    const tr = document.createElement('tr');
+                    const isCurrentUser = appState.currentUser?.uid === q?.userId;
+                    if (isCurrentUser) tr.className = 'current-user';
+                    const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
+                    const joinedTime = typeof q?.joinedAt === 'number' ? new Date(q.joinedAt).toLocaleTimeString('es-DO') : '...';
+                    tr.innerHTML = `<td>${index + 1}</td><td>${q?.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
+                    body.appendChild(tr);
+                });
             }
-            sortedQueueArray.forEach((q, index) => {
-                const tr = document.createElement('tr');
-                if (appState.currentUser?.uid === q?.userId) tr.className = 'current-user';
-                const actionCell = appState.currentUser?.uid === q?.userId ? `<button class="leave-queue-btn" data-key="${q.userId}">Salir</button>` : 'En espera';
-                const joinedTime = typeof q?.joinedAt === 'number' ? new Date(q.joinedAt).toLocaleTimeString('es-DO') : '...';
-                tr.innerHTML = `<td>${index + 1}</td><td>${q?.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
-                body.appendChild(tr);
-            });
+            // CORRECCIÓN: La lógica del botón se mueve aquí para asegurar que se ejecute después de renderizar la cola.
+            const isUserInQueue = sortedQueueArray.some(user => user.userId === appState.currentUser?.uid);
+            const isUserActive = appState.localActiveUser?.userId === appState.currentUser?.uid;
+            UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
         
         function renderActiveUserUI(data) {
             UIElements.activeUserInfo.innerHTML = data ? `<b>${data.email}</b>` : 'Nadie activo';
             UIElements.pauseInfo.innerHTML = '';
-            const isUserInQueue = appState.localQueue.some(user => user.userId === appState.currentUser?.uid);
-            const isUserActive = data?.userId === appState.currentUser?.uid;
-            UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
-
-            if (isUserActive) {
+            if (data?.userId === appState.currentUser?.uid) {
                 const pausesUsed = data.pausesUsed || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 UIElements.timerControls.innerHTML = `
-                    <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg...></svg>Pausar</button>
-                    <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><svg...></svg>Reanudar</button>
-                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn"><svg...></svg>Ceder Turno</button>`;
-                if(data.isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
+                    <button id="pauseTimerBtn" class="timer-btn" ${data.isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg ...>Pausar</svg></button>
+                    <button id="resumeTimerBtn" class="timer-btn" ${!data.isPaused ? 'disabled' : ''}><svg ...>Reanudar</svg></button>
+                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn"><svg ...>Ceder Turno</svg></button>`;
+                if (data.isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
             } else {
                 UIElements.timerControls.innerHTML = data?.isPaused ? '<i>Turno en pausa</i>' : '';
