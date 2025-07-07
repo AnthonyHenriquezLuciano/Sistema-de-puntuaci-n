@@ -508,63 +508,64 @@
         }
         
         async function promoteNextUserWithRetry(maxRetries = 3) {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
-                    const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
-                    const [activeUserSnap, queueSnap, sessionsSnap] = await Promise.all([
-                        get(activeUserRef), get(queueRef), get(ref(appState.db, 'activeSessions'))
-                    ]);
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
+            const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
+            const [activeUserSnap, queueSnap, sessionsSnap] = await Promise.all([
+                get(activeUserRef), get(queueRef), get(ref(appState.db, 'activeSessions'))
+            ]);
 
-                    if (activeUserSnap.exists()) return true;
-                    if (!queueSnap.exists()) return true;
-                    
-                    const activeSessions = sessionsSnap.val() || {};
-                    let nextInLine = null;
-                    
-                    const queueArray = [];
-                    queueSnap.forEach(snap => {
-                        const userData = snap.val();
-                        userData.key = snap.key;
-                        queueArray.push(userData);
-                    });
+            if (activeUserSnap.exists()) return true;
+            if (!queueSnap.exists()) return true;
+            
+            const activeSessions = sessionsSnap.val() || {};
+            let nextInLine = null;
+            
+            const queueArray = [];
+            queueSnap.forEach(snap => {
+                const userData = snap.val();
+                // userData.key = snap.key; // Ya no es necesario depender de esta línea
+                queueArray.push(userData);
+            });
 
-                    for (const user of queueArray) {
-                        if (activeSessions[user.userId]) {
-                            nextInLine = user;
-                            break;
-                        } else {
-                            Logger.info(`El siguiente usuario en cola (${user.email}) no está conectado. Eliminando.`);
-                            await remove(ref(appState.db, `queueSystem/queue/${user.userId}`));
-                        }
-                    }
-                    
-                    if (nextInLine) {
-                        const result = await runTransaction(activeUserRef, (currentData) => {
-                            if (currentData) return;
-                            return {
-                                userId: nextInLine.userId, email: nextInLine.email, isPaused: false,
-                                remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(), pausesUsed: 0
-                            };
-                        });
-                        
-                        if (result.committed) {
-                            Logger.info(`Usuario ${nextInLine.email} promovido.`);
-                            await remove(ref(appState.db, `queueSystem/queue/${nextInLine.key}`));
-                        }
-                    }
-                    return true;
-                } catch (error) {
-                    Logger.error('promoteUserWithRetry', error, { attempt: i + 1 });
-                    if (i === maxRetries - 1) {
-                        showError('No se pudo promover al siguiente usuario. Inténtalo de nuevo.');
-                        throw error;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 500 * (i + 1)));
+            for (const user of queueArray) {
+                if (activeSessions[user.userId]) {
+                    nextInLine = user;
+                    break;
+                } else {
+                    Logger.info(`El siguiente usuario en cola (${user.email}) no está conectado. Eliminando.`);
+                    await remove(ref(appState.db, `queueSystem/queue/${user.userId}`));
                 }
             }
-            return false;
+            
+            if (nextInLine) {
+                const result = await runTransaction(activeUserRef, (currentData) => {
+                    if (currentData) return;
+                    return {
+                        userId: nextInLine.userId, email: nextInLine.email, isPaused: false,
+                        remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(), pausesUsed: 0
+                    };
+                });
+                
+                if (result.committed) {
+                    Logger.info(`Usuario ${nextInLine.email} promovido.`);
+                    // CORRECCIÓN: Se usa nextInLine.userId para asegurar la referencia correcta.
+                    await remove(ref(appState.db, `queueSystem/queue/${nextInLine.userId}`));
+                }
+            }
+            return true;
+        } catch (error) {
+            Logger.error('promoteUserWithRetry', error, { attempt: i + 1 });
+            if (i === maxRetries - 1) {
+                showError('No se pudo promover al siguiente usuario. Inténtalo de nuevo.');
+                throw error;
+            }
+            await new Promise(resolve => setTimeout(resolve, 500 * (i + 1)));
         }
+    }
+    return false;
+}
         
         function handleActiveUserChange() {
             cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
