@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos</title>
+    <title>Sistema de Turnos con Supabase</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
-            --color-primary: #00529B; --color-secondary: #00A3E0; --color-background: #F0F4F8; 
+            --color-primary: #00529B; --color-secondary: #1E88E5; --color-background: #F0F4F8; 
             --color-surface: #FFFFFF; --color-text-primary: #212529; --color-text-secondary: #6c757d; 
             --color-success: #28a745; --color-danger: #dc3545; --color-warning: #ffc107; 
             --shadow: 0 4px 12px rgba(0, 0, 0, 0.08); --border-radius: 8px; 
@@ -223,29 +223,16 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getDatabase, ref, onValue, set, get, remove, onDisconnect, serverTimestamp, runTransaction, query, orderByChild, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-        // --- CONSTANTES Y CONFIGURACIÓN ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyAs2MmgrO0UmXtlm-HWCw2hcfqYcIg74Qs",
-            authDomain: "sistema-turnos-gestores.firebaseapp.com",
-            databaseURL: "https://sistema-turnos-gestores-default-rtdb.firebaseio.com",
-            projectId: "sistema-turnos-gestores",
-            storageBucket: "sistema-turnos-gestores.appspot.com",
-            messagingSenderId: "322320112231",
-            appId: "1:322320112231:web:dbb93a76a85a8906d2d2c2",
-            measurementId: "G-GV4JVLKEFY"
-        };
-        
+        const SUPABASE_URL = 'https://sxxjunfkgskebfitxsuc.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4eGp1bmZrZ3NrZWJmaXR4c3VjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MzE5OTYsImV4cCI6MjA2NzUwNzk5Nn0.BaLTJIatIlgcQF7hdcf6FheW0aDGvLpT6H2pxyyZsjY';
+
         const TURN_TIME_SECONDS = 15 * 60;
         const MAX_PAUSE_DURATION_SECONDS = 30;
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
-        const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-        const SESSION_TIMEOUT_MS = 10 * 60 * 1000; 
-
+        
         const MESSAGES = {
             QUEUE_JOIN_SUCCESS: 'Te uniste a la cola.', QUEUE_JOIN_ERROR: 'Error al unirte a la cola.',
             QUEUE_LEAVE_SUCCESS: 'Has salido de la cola.', TURN_NOTIFICATION: '¡Es tu turno!',
@@ -259,11 +246,11 @@
         };
 
         const appState = {
-            firebaseApp: null, auth: null, db: null, currentUser: null,
-            serverTimeOffset: 0, isConnected: false, wasConnected: true,
+            supabase: null, currentUser: null,
+            isConnected: true,
             sessionId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             originalTitle: document.title,
-            timers: {}, listeners: [],
+            timers: {}, listeners: {},
             localQueue: [], localActiveUser: null,
         };
 
@@ -284,43 +271,40 @@
 
         document.addEventListener('DOMContentLoaded', startApp);
         
-        async function startApp() {
-            try {
-                appState.firebaseApp = initializeApp(firebaseConfig);
-                appState.auth = getAuth(appState.firebaseApp);
-                appState.db = getDatabase(appState.firebaseApp);
-                await setPersistence(appState.auth, browserLocalPersistence);
-                addEventListeners();
-                startPageClock();
-                requestNotificationPermission();
-                onValue(ref(appState.db, '.info/serverTimeOffset'), snap => appState.serverTimeOffset = snap.val() || 0);
-                onValue(ref(appState.db, '.info/connected'), handleConnectionChange);
-                onAuthStateChanged(appState.auth, handleAuthStateChange);
-            } catch (error) {
-                Logger.error('startApp', error);
-                showErrorScreen(`Error Crítico al Inicializar: ${error.message}`);
+        function startApp() {
+            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+                return showErrorScreen("Las credenciales de Supabase no están configuradas.");
             }
+            appState.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            addEventListeners();
+            startPageClock();
+            requestNotificationPermission();
+            
+            appState.supabase.auth.onAuthStateChange((_event, session) => {
+                const user = session?.user || null;
+                handleAuthStateChange(user);
+            });
         }
         
         function addEventListeners() {
             UIElements.loginButton.onclick = handleLogin;
             UIElements.logoutBtn.onclick = handleLogout;
             UIElements.joinQueueBtn.onclick = joinQueue;
-            UIElements.forgotPasswordLink.onclick = handleForgotPassword;
             UIElements.passwordInput.onkeypress = e => { if (e.key === 'Enter') handleLogin(); };
             
             UIElements.queueListBody.addEventListener('click', async (e) => {
                 if (e.target.matches('.leave-queue-btn')) {
-                    const key = e.target.dataset.key;
-                    if (!key) return;
+                    const userId = e.target.dataset.key;
+                    if (!userId) return;
                     e.target.disabled = true;
                     try {
-                        await remove(ref(appState.db, `queueSystem/queue/${key}`));
+                        const { error } = await appState.supabase.from('queue').delete().eq('user_id', userId);
+                        if (error) throw error;
                         showQueueMessage('QUEUE_LEAVE_SUCCESS', 'success');
-                        updateJoinButtonState();
-                    } catch (err) { if(handleDatabaseError(err, 'leaveQueueFromList')) return; }
+                    } catch (err) { handleDatabaseError(err, 'leaveQueueFromList'); }
                 }
             });
+
             UIElements.timerControls.addEventListener('click', (e) => {
                 const targetButton = e.target.closest('button');
                 if (!targetButton) return;
@@ -330,80 +314,28 @@
             });
         }
         
-        function handleConnectionChange(snap) {
-            appState.wasConnected = appState.isConnected;
-            appState.isConnected = snap.val() === true;
-            updateConnectionUI();
-            
-            if (!appState.wasConnected && appState.isConnected && appState.currentUser) {
-                Logger.info('Reconexión detectada. Resincronizando estado.');
-                resyncApplicationState();
-            }
-        }
-
-        function updateConnectionUI() {
-            const statusEl = UIElements.connectionStatus;
-            statusEl.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-            statusEl.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
-        }
-
-        async function resyncApplicationState() {
-            try {
-                await setupUserSession(appState.currentUser);
-                const queueSnap = await get(query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt')));
-                const activeUserSnap = await get(ref(appState.db, 'queueSystem/activeUser'));
-                const sortedQueue = [];
-                queueSnap.forEach(childSnap => {
-                    const userData = childSnap.val();
-                    userData.key = childSnap.key; 
-                    sortedQueue.push(userData);
-                });
-                appState.localQueue = sortedQueue;
-                appState.localActiveUser = activeUserSnap.val();
-                renderQueue();
-                handleActiveUserChange();
-            } catch (error) {
-                Logger.error('resyncApplicationState', error);
-            }
-        }
-
         async function handleAuthStateChange(user) {
             if (user) await onUserLoggedIn(user);
             else onUserLoggedOut();
         }
 
-        const Validator = {
-            isEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
-            isPasswordStrong: (password) => password.length >= 6
-        };
-        
         async function handleLogin() {
             setButtonLoading(UIElements.loginButton, true, 'Verificando...');
             const email = UIElements.emailInput.value.trim();
             const password = UIElements.passwordInput.value;
-
-            if (!Validator.isEmail(email)) {
-                showError('Por favor, ingresa un correo electrónico válido.');
-                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
-                return;
-            }
-            if (!Validator.isPasswordStrong(password)) {
-                showError('La contraseña debe tener al menos 6 caracteres.');
-                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
-                return;
-            }
-
+            
             try {
-                await signInWithEmailAndPassword(appState.auth, email, password);
+                const { data, error } = await appState.supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
             } catch (error) {
-                Logger.error('handleLogin', error, { email });
-                showError(getFriendlyAuthError(error.code));
+                Logger.error('handleLogin', error);
+                showError('Correo o contraseña incorrectos.');
                 setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
             }
         }
 
         async function onUserLoggedIn(user) {
-            if (!user || appState.currentUser?.uid === user.uid) return;
+            if (!user || appState.currentUser?.id === user.id) return;
             cleanupAll();
             appState.currentUser = user;
             try {
@@ -411,25 +343,19 @@
                 UIElements.userName.textContent = user.email;
                 UIElements.loginModal.style.display = 'none';
                 UIElements.mainContainer.style.display = 'block';
-                setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
                 setupAppListeners();
-                appState.timers.cleanup = setInterval(cleanupStaleUsers, CLEANUP_INTERVAL_MS);
-                updateJoinButtonState();
+                fetchInitialData();
             } catch (error) {
-                Logger.error('onUserLoggedIn', error, { userId: user.uid });
-                if (handleDatabaseError(error, 'onUserLoggedIn')) return;
+                Logger.error('onUserLoggedIn', error, { userId: user.id });
             }
         }
         
         async function handleLogout() {
             setButtonLoading(UIElements.logoutBtn, true);
+            await appState.supabase.from('active_sessions').delete().eq('user_id', appState.currentUser.id);
+            await appState.supabase.auth.signOut();
             cleanupAll();
-            try {
-                await signOut(appState.auth);
-            } catch (error) {
-                Logger.error('handleLogout', error);
-                setButtonLoading(UIElements.logoutBtn, false, 'Cerrar Sesión');
-            }
+            onUserLoggedOut();
         }
 
         function onUserLoggedOut() {
@@ -445,155 +371,96 @@
         }
         
         async function setupUserSession(user) {
-            const sessionRef = ref(appState.db, `activeSessions/${user.uid}`);
-            try {
-                await set(sessionRef, { email: user.email, sessionId: appState.sessionId, lastHeartbeat: serverTimestamp() });
-                onDisconnect(sessionRef).remove();
-                startHeartbeat();
-            } catch (error) {
-                if (handleDatabaseError(error, 'setupUserSession')) return;
-            }
+            await appState.supabase.from('active_sessions').upsert({
+                user_id: user.id,
+                session_id: appState.sessionId,
+                last_heartbeat: new Date().toISOString()
+            });
+            startHeartbeat(user);
         }
-
+        
         function setupAppListeners() {
             cleanupAllListeners();
-            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
-            const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
-            
-            const activeUserUnsubscribe = onValue(activeUserRef, (snap) => {
-                appState.localActiveUser = snap.val();
-                handleActiveUserChange();
-            }, (error) => handleDatabaseError(error, 'activeUserListener'));
-            
-            const queueUnsubscribe = onValue(queueRef, (snap) => {
-                const sortedQueue = [];
-                snap.forEach(childSnap => {
-                    const userData = childSnap.val();
-                    userData.key = childSnap.key;
-                    sortedQueue.push(userData);
-                });
-                appState.localQueue = sortedQueue;
-                renderQueue();
-            }, (error) => handleDatabaseError(error, 'queueListener'));
+            const channel = appState.supabase.channel('public-tables-channel');
+            const queueListener = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchAndRenderQueue);
+            const activeUserListener = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'active_user' }, fetchAndRenderActiveUser);
+            channel.subscribe((status) => {
+                appState.isConnected = (status === 'SUBSCRIBED');
+                updateConnectionUI();
+            });
+            appState.listeners.channel = channel;
+        }
 
-            appState.listeners.push(activeUserUnsubscribe, queueUnsubscribe);
+        async function fetchInitialData() {
+            await fetchAndRenderQueue();
+            await fetchAndRenderActiveUser();
+        }
+
+        async function fetchAndRenderQueue() {
+            const { data, error } = await appState.supabase.from('queue').select('*').order('joined_at', { ascending: true });
+            if (error) return handleDatabaseError(error, 'fetchQueue');
+            appState.localQueue = data || [];
+            renderQueue();
+        }
+
+        async function fetchAndRenderActiveUser() {
+             const { data, error } = await appState.supabase.from('active_user').select('*').limit(1).single();
+             if (error && error.code !== 'PGRST116') return handleDatabaseError(error, 'fetchActiveUser');
+             appState.localActiveUser = data;
+             handleActiveUserChange();
         }
 
         async function joinQueue() {
             const { currentUser, isConnected } = appState;
             if (!isConnected || !currentUser || UIElements.joinQueueBtn.disabled) return;
             setButtonLoading(UIElements.joinQueueBtn, true, 'Uniéndose...');
-
-            if (appState.localActiveUser?.userId === currentUser.uid) {
-                showNotification("Ya tienes un turno activo.", "warning");
-                setButtonLoading(UIElements.joinQueueBtn, false, '📝 Unirse a la Cola');
-                return;
-            }
-
+            
             try {
-                await set(ref(appState.db, `queueSystem/queue/${currentUser.uid}`), { 
-                    userId: currentUser.uid, email: currentUser.email, joinedAt: serverTimestamp() 
-                });
+                const { error } = await appState.supabase.from('queue').upsert({ user_id: currentUser.id, email: currentUser.email, joined_at: new Date().toISOString() });
+                if (error) throw error;
                 showQueueMessage('QUEUE_JOIN_SUCCESS', 'success');
-                await promoteNextUserWithRetry();
+                await promoteNextUser();
             } catch (error) {
                 showQueueMessage('QUEUE_JOIN_ERROR', 'error');
-                if (handleDatabaseError(error, 'joinQueue')) return;
+                handleDatabaseError(error, 'joinQueue');
             } finally {
                 setButtonLoading(UIElements.joinQueueBtn, false, '📝 Unirse a la Cola');
             }
         }
         
-        // CORRECCIÓN: Lógica atómica para promover y eliminar
-        async function promoteNextUserWithRetry(maxRetries = 3) {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
-                    const activeUserSnap = await get(activeUserRef);
-                    if (activeUserSnap.exists()) return true;
-
-                    const queueRef = query(ref(appState.db, 'queueSystem/queue'), orderByChild('joinedAt'));
-                    const queueSnap = await get(queueRef);
-                    if (!queueSnap.exists()) return true;
-                    
-                    const sessionsSnap = await get(ref(appState.db, 'activeSessions'));
-                    const activeSessions = sessionsSnap.val() || {};
-                    
-                    let nextInLine = null;
-                    const queueArray = [];
-                    queueSnap.forEach(snap => queueArray.push(snap.val()));
-
-                    for (const user of queueArray) {
-                        if (activeSessions[user.userId]) {
-                            nextInLine = user;
-                            break; 
-                        } else {
-                            Logger.info(`Usuario inactivo ${user.email} encontrado en cola. Eliminando.`);
-                            await remove(ref(appState.db, `queueSystem/queue/${user.userId}`));
-                        }
-                    }
-                    
-                    if (nextInLine) {
-                        const updates = {};
-                        updates[`queueSystem/activeUser`] = {
-                            userId: nextInLine.userId, email: nextInLine.email, isPaused: false,
-                            remainingTime: TURN_TIME_SECONDS, lastUpdated: serverTimestamp(), pausesUsed: 0
-                        };
-                        updates[`queueSystem/queue/${nextInLine.userId}`] = null;
-
-                        await update(ref(appState.db), updates);
-                        Logger.info(`Usuario ${nextInLine.email} promovido de forma atómica.`);
-                    }
-                    return true; 
-                } catch (error) {
-                    Logger.error('promoteUserWithRetry', error, { attempt: i + 1 });
-                    if (i === maxRetries - 1) {
-                        showError('No se pudo promover al siguiente usuario.');
-                        throw error;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 500));
-                }
-            }
-            return false;
+        async function promoteNextUser() {
+            const { data, error } = await appState.supabase.rpc('promote_next_user');
+            if (error) Logger.error('promoteNextUser RPC', error);
         }
         
         function handleActiveUserChange() {
+            const activeUserData = appState.localActiveUser;
             cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
             appState.timers.activeUserAnimationFrame = null;
-            clearInterval(appState.timers.autoResumeTimer);
+            clearTimeout(appState.timers.autoResumeTimer);
             stopTitleNotification();
-            
-            const activeUserData = appState.localActiveUser;
 
             renderActiveUserUI();
             updateSummaryPanel();
-            updateJoinButtonState(); // CORRECCIÓN: Actualizar estado del botón aquí también
 
-            if (activeUserData) {
-                // CORRECCIÓN: Asegurar que el usuario activo no esté en la cola
-                const userInQueue = appState.localQueue.find(u => u.userId === activeUserData.userId);
-                if (userInQueue) {
-                    remove(ref(appState.db, `queueSystem/queue/${activeUserData.userId}`));
-                }
-
-                if (activeUserData.isPaused) {
-                     updateTimerDisplayUI(activeUserData.remainingTime);
-                     if(activeUserData.userId === appState.currentUser?.uid) {
+            if (activeUserData && activeUserData.user_id) {
+                if (activeUserData.is_paused) {
+                     updateTimerDisplayUI(activeUserData.remaining_time);
+                     if(activeUserData.user_id === appState.currentUser?.id) {
                         appState.timers.autoResumeTimer = setTimeout(() => {
                             toggleTimerPause(false);
-                            showNotification(MESSAGES.PAUSE_TIME_EXPIRED, "warning");
                         }, MAX_PAUSE_DURATION_SECONDS * 1000);
                      }
                 } else {
                     startOptimizedTimer(activeUserData);
                 }
-                const timeSinceUpdate = (Date.now() + appState.serverTimeOffset) - (activeUserData.lastUpdated || 0);
-                if (activeUserData.userId === appState.currentUser?.uid && timeSinceUpdate < 5000 && !activeUserData.isPaused) {
+                const timeSinceUpdate = (new Date() - new Date(activeUserData.last_updated || 0));
+                if (activeUserData.user_id === appState.currentUser?.id && timeSinceUpdate < 5000 && !activeUserData.is_paused) {
                    showTurnNotification();
                 }
             } else {
                 updateTimerDisplayUI(TURN_TIME_SECONDS);
-                if (appState.currentUser) promoteNextUserWithRetry();
+                if (appState.currentUser) promoteNextUser();
             }
         }
         
@@ -603,22 +470,13 @@
                 if (appState.timers.activeUserAnimationFrame === null) return;
                 
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
-                    const serverNow = Date.now() + appState.serverTimeOffset;
-                    const elapsed = Math.floor((serverNow - (activeUserData.lastUpdated || serverNow)) / 1000);
-                    const remaining = activeUserData.remainingTime - elapsed;
-                    
+                    const elapsed = Math.floor((new Date() - new Date(activeUserData.last_updated)) / 1000);
+                    const remaining = activeUserData.remaining_time - elapsed;
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
                     lastUpdate = timestamp;
-
                     if (remaining <= 0) {
-                        cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
-                        appState.timers.activeUserAnimationFrame = null;
-                        runTransaction(ref(appState.db, 'queueSystem/activeUser'), (currentData) => {
-                            return (currentData && currentData.userId === activeUserData.userId) ? null : undefined; 
-                        }).then(({ committed }) => {
-                            if (committed) promoteNextUserWithRetry();
-                        });
+                        leaveTurn();
                         return;
                     }
                 }
@@ -628,72 +486,41 @@
         }
 
         async function toggleTimerPause(shouldPause) {
-            const activeUserRef = ref(appState.db, 'queueSystem/activeUser');
-            try {
-                await runTransaction(activeUserRef, (currentData) => {
-                    if (!currentData || currentData.userId !== appState.currentUser?.uid || currentData.isPaused === shouldPause) return;
-                    const updates = { ...currentData, isPaused: shouldPause };
-                    if (shouldPause) {
-                        if ((currentData.pausesUsed || 0) >= MAX_PAUSES_PER_TURN) {
-                            showNotification(MESSAGES.PAUSE_LIMIT_REACHED, "error"); return;
-                        }
-                        const elapsed = Math.floor(((Date.now() + appState.serverTimeOffset) - currentData.lastUpdated) / 1000);
-                        updates.remainingTime = Math.max(0, currentData.remainingTime - elapsed);
-                        updates.pausesUsed = (currentData.pausesUsed || 0) + 1;
-                        updates.pauseStartTime = serverTimestamp();
-                    } else {
-                        updates.lastUpdated = serverTimestamp();
-                    }
-                    return updates;
-                });
-            } catch (error) { if (handleDatabaseError(error, 'toggleTimerPause')) return; }
+            const { data: currentTurn } = await supabase.from('active_user').select('*').limit(1).single();
+            if(!currentTurn || currentTurn.user_id !== appState.currentUser.id || currentTurn.is_paused === shouldPause) return;
+
+            let updates = { is_paused: shouldPause };
+            if(shouldPause) {
+                if(currentTurn.pauses_used >= MAX_PAUSES_PER_TURN) {
+                    return showNotification(MESSAGES.PAUSE_LIMIT_REACHED, 'error');
+                }
+                const elapsed = Math.floor((new Date() - new Date(currentTurn.last_updated)) / 1000);
+                updates.remaining_time = Math.max(0, currentTurn.remaining_time - elapsed);
+                updates.pauses_used = currentTurn.pauses_used + 1;
+                updates.pause_start_time = new Date().toISOString();
+            } else {
+                updates.last_updated = new Date().toISOString();
+            }
+
+            const { error } = await supabase.from('active_user').update(updates).eq('id', 1);
+            if(error) handleDatabaseError(error, 'toggleTimerPause');
         }
 
         async function leaveTurn() {
             setButtonLoading(document.getElementById('leaveTurnBtn'), true);
-            if (appState.currentUser) {
-                showNotification("Has cedido tu turno.", "warning");
-                await remove(ref(appState.db, `queueSystem/activeUser`));
-            }
-        }
-
-        async function cleanupStaleUsers() {
-            Logger.info('Ejecutando limpieza de usuarios obsoletos...');
-            try {
-                const cutoffTime = Date.now() - SESSION_TIMEOUT_MS;
-                const updates = {};
-                
-                const sessionsRef = ref(appState.db, 'activeSessions');
-                const sessionsSnap = await get(sessionsRef);
-                if (!sessionsSnap.exists()) return;
-
-                sessionsSnap.forEach(sessionSnap => {
-                    const session = sessionSnap.val();
-                    const lastHeartbeat = session.lastHeartbeat || 0;
-                    if (lastHeartbeat < cutoffTime) {
-                        Logger.info(`Marcando sesión obsoleta para eliminar: ${session.email}`);
-                        updates[`activeSessions/${sessionSnap.key}`] = null;
-                        updates[`queueSystem/queue/${sessionSnap.key}`] = null;
-                    }
-                });
-
-                if (Object.keys(updates).length > 0) {
-                    await update(ref(appState.db), updates);
-                }
-            } catch(error) {
-                Logger.error('cleanupStaleUsers', error);
-            }
+            const { error } = await supabase.from('active_user').update({ user_id: null, email: null, remaining_time: null }).eq('id', 1);
+            if (error) handleDatabaseError(error, 'leaveTurn');
         }
 
         function renderQueue() {
-            const sortedQueueArray = appState.localQueue;
+            const queue = appState.localQueue;
             const body = UIElements.queueListBody;
             body.innerHTML = '';
-            UIElements.queueCount.textContent = sortedQueueArray.length;
-            if (sortedQueueArray.length === 0) {
+            UIElements.queueCount.textContent = queue.length;
+            if (queue.length === 0) {
                 body.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay usuarios en espera</td></tr>';
             } else {
-                sortedQueueArray.forEach((q, index) => {
+                queue.forEach((q, index) => {
                     const tr = createQueueRow(q, index);
                     if (tr) body.appendChild(tr);
                 });
@@ -702,63 +529,60 @@
         }
 
         function createQueueRow(queueItem, index) {
-            if (!queueItem || !queueItem.userId) return null;
+            if (!queueItem || !queueItem.user_id) return null;
             const tr = document.createElement('tr');
-            tr.dataset.key = queueItem.userId;
-            const isCurrentUser = appState.currentUser?.uid === queueItem.userId;
+            tr.dataset.key = queueItem.user_id;
+            const isCurrentUser = appState.currentUser?.id === queueItem.user_id;
             if (isCurrentUser) tr.className = 'current-user';
-            // CORRECCIÓN: Usar directamente userId que es la clave maestra.
-            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.userId}">Salir</button>` : 'En espera';
-            const joinedTime = typeof queueItem.joinedAt === 'number' ? new Date(queueItem.joinedAt).toLocaleTimeString('es-DO') : '...';
+            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.user_id}">Salir</button>` : 'En espera';
+            const joinedTime = new Date(queueItem.joined_at).toLocaleTimeString('es-DO');
             tr.innerHTML = `<td>${index + 1}</td><td>${queueItem.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
             return tr;
         }
 
         function updateJoinButtonState() {
             if(!appState.currentUser) return;
-            const isUserInQueue = appState.localQueue.some(user => user.userId === appState.currentUser.uid);
-            const isUserActive = appState.localActiveUser?.userId === appState.currentUser.uid;
+            const isUserInQueue = appState.localQueue.some(user => user.user_id === appState.currentUser.id);
+            const isUserActive = appState.localActiveUser?.user_id === appState.currentUser.id;
             UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
         
         function renderActiveUserUI() {
             const data = appState.localActiveUser;
-            UIElements.activeUserInfo.innerHTML = data ? `<b>${data.email}</b>` : 'Nadie activo';
+            UIElements.activeUserInfo.innerHTML = data && data.email ? `<b>${data.email}</b>` : 'Nadie activo';
             UIElements.pauseInfo.innerHTML = '';
             updateJoinButtonState();
 
-            if (data?.userId === appState.currentUser?.uid) {
-                const pausesUsed = data.pausesUsed || 0;
+            if (data?.user_id === appState.currentUser?.id) {
+                const pausesUsed = data.pauses_used || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
-                const isPaused = data.isPaused || false;
-
+                const isPaused = data.is_paused || false;
                 UIElements.timerControls.innerHTML = `
                     <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
                     <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
                     <button id="leaveTurnBtn" class="timer-btn leave-turn-btn" data-original-text="Ceder Turno"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>Ceder Turno</button>`;
-                
                 if(isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
             } else {
-                UIElements.timerControls.innerHTML = data?.isPaused ? '<i>Turno en pausa</i>' : '';
+                UIElements.timerControls.innerHTML = data?.is_paused ? '<i>Turno en pausa</i>' : '';
             }
         }
         
         function updateSummaryPanel() {
              if (!appState.currentUser) { UIElements.summaryPanel.style.display = 'none'; return; }
-            const myQueueIndex = appState.localQueue.findIndex(u => u.userId === appState.currentUser.uid);
+            const myQueueIndex = appState.localQueue.findIndex(u => u.user_id === appState.currentUser.id);
             if (myQueueIndex === -1) { UIElements.summaryPanel.style.display = 'none'; return; }
             UIElements.summaryPanel.style.display = 'block';
             const usersAhead = myQueueIndex;
             let estimatedWaitSeconds = usersAhead * TURN_TIME_SECONDS;
             const activeUser = appState.localActiveUser;
-            if (activeUser) {
+            if (activeUser && activeUser.user_id) {
                 let remainingTime = 0;
-                if (activeUser.isPaused) {
-                    remainingTime = activeUser.remainingTime;
-                } else if (activeUser.lastUpdated) {
-                    const elapsed = Math.floor(((Date.now() + appState.serverTimeOffset) - activeUser.lastUpdated) / 1000);
-                    remainingTime = Math.max(0, activeUser.remainingTime - elapsed);
+                if (activeUser.is_paused) {
+                    remainingTime = activeUser.remaining_time;
+                } else if (activeUser.last_updated) {
+                    const elapsed = Math.floor((new Date() - new Date(activeUser.last_updated)) / 1000);
+                    remainingTime = Math.max(0, activeUser.remaining_time - elapsed);
                 }
                 estimatedWaitSeconds += remainingTime;
             }
@@ -775,25 +599,23 @@
         }
 
         function cleanupAll() {
-            Object.values(appState.timers).forEach(timerId => {
-                clearInterval(timerId);
-                cancelAnimationFrame(timerId);
-            });
+            Object.values(appState.timers).forEach(timerId => { clearInterval(timerId); cancelAnimationFrame(timerId); });
             appState.timers = {};
             cleanupAllListeners();
         }
 
         function cleanupAllListeners() {
-            appState.listeners.forEach(unsubscribe => unsubscribe());
-            appState.listeners = [];
+            if (appState.listeners.channel) {
+                appState.supabase.removeChannel(appState.listeners.channel);
+                appState.listeners = {};
+            }
         }
 
-        function startHeartbeat() {
+        function startHeartbeat(user) {
             clearInterval(appState.timers.heartbeat);
             appState.timers.heartbeat = setInterval(() => {
-                if (appState.currentUser && appState.isConnected) {
-                    set(ref(appState.db, `activeSessions/${appState.currentUser.uid}/lastHeartbeat`), serverTimestamp()).catch(error => Logger.error('heartbeat', error));
-                }
+                appState.supabase.from('active_sessions').upsert({ user_id: user.id, last_heartbeat: new Date().toISOString() })
+                    .catch(err => Logger.error('heartbeat', err));
             }, HEARTBEAT_INTERVAL_MS);
         }
 
@@ -805,22 +627,13 @@
         }
         
         async function handleForgotPassword(e) {
-            e.preventDefault();
-            const email = UIElements.emailInput.value.trim();
-            if (!email) { showError("Ingresa tu correo para restablecer la contraseña."); return; }
-            setButtonLoading(e.target, true);
-            try {
-                await sendPasswordResetEmail(appState.auth, email);
-                showNotification(`Se ha enviado un enlace a ${email}`, 'success');
-                showError(null);
-            } catch (error) { showError(getFriendlyAuthError(error.code)); }
-            finally { setButtonLoading(e.target, false); }
+            // ... (Esta función requeriría configuración adicional en Supabase)
+            showNotification("Función no implementada para Supabase en esta versión.", "warning");
         }
         
         function getFriendlyAuthError(errorCode) {
             const errors = {
-                'auth/user-not-found': 'Correo o contraseña incorrectos.', 'auth/wrong-password': 'Correo o contraseña incorrectos.',
-                'auth/invalid-email': 'El formato del correo es inválido.', 'auth/too-many-requests': 'Demasiados intentos. Inténtalo más tarde.'
+                'invalid-login-credentials': 'Correo o contraseña incorrectos.',
             };
             return errors[errorCode] || 'Ocurrió un error. Por favor, inténtalo de nuevo.';
         }
@@ -828,16 +641,14 @@
         function setButtonLoading(button, isLoading, loadingText = '') {
             if (!button) return;
             const originalText = button.dataset.originalText || button.textContent;
-            if (!button.dataset.originalText) {
-                button.dataset.originalText = originalText;
-            }
+            if (!button.dataset.originalText) button.dataset.originalText = originalText;
             button.disabled = isLoading;
             button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
 
         function showError(message) {
-            UIElements.userError.style.display = message ? 'block' : 'none';
             UIElements.userError.textContent = message;
+            UIElements.userError.style.display = message ? 'block' : 'none';
         }
         
         function showQueueMessage(key, type = 'success') {
@@ -882,11 +693,7 @@
 
         function handleDatabaseError(error, context) {
             Logger.error(context, error);
-            if (error.message?.toUpperCase().includes('PERMISSION_DENIED')) {
-                showErrorScreen(`<b>Error de Permiso:</b> La aplicación no tiene permiso para realizar esta acción.`);
-                return true; 
-            }
-            return false;
+            showError(`Error de base de datos en: ${context}. Revisa la consola.`);
         }
     </script>
 </body>
