@@ -160,7 +160,10 @@
             <button class="login-btn" id="loginButton" data-original-text="Iniciar Sesión">
                 <span id="loginButtonText">Iniciar Sesión</span>
             </button>
-            </div>
+            <p class="forgot-password">
+                <a href="#" id="forgotPasswordLink">¿Olvidaste tu contraseña?</a>
+            </p>
+        </div>
     </div>
 
     <div class="container" id="mainContainer" style="display: none;">
@@ -222,7 +225,6 @@
     <script type="module">
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-        // --- CONSTANTES Y CONFIGURACIÓN ---
         const SUPABASE_URL = 'https://sxxjunfkgskebfitxsuc.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4eGp1bmZrZ3NrZWJmaXR4c3VjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MzE5OTYsImV4cCI6MjA2NzUwNzk5Nn0.BaLTJIatIlgcQF7hdcf6FheW0aDGvLpT6H2pxyyZsjY';
 
@@ -231,6 +233,18 @@
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         
+        const MESSAGES = {
+            QUEUE_JOIN_SUCCESS: 'Te uniste a la cola.', QUEUE_JOIN_ERROR: 'Error al unirte a la cola.',
+            QUEUE_LEAVE_SUCCESS: 'Has salido de la cola.', TURN_NOTIFICATION: '¡Es tu turno!',
+            PAUSE_LIMIT_REACHED: 'Has alcanzado el límite de pausas para este turno.',
+            PAUSE_TIME_EXPIRED: 'El tiempo de pausa ha terminado. Tu turno se ha reanudado.'
+        };
+        
+        const Logger = {
+            error: (context, error, metadata = {}) => console.error(`[${new Date().toISOString()}] CONTEXT: ${context} | ERROR:`, error, "| METADATA:", metadata),
+            info: (message, metadata = {}) => console.info(`[${new Date().toISOString()}] INFO: ${message}`, metadata)
+        };
+
         const appState = {
             supabase: null, currentUser: null,
             isConnected: true,
@@ -255,7 +269,6 @@
             loginButtonText: document.getElementById('loginButtonText'),
         };
 
-        // --- INICIALIZACIÓN ---
         document.addEventListener('DOMContentLoaded', startApp);
         
         function startApp() {
@@ -283,7 +296,11 @@
                     const userId = e.target.dataset.key;
                     if (!userId) return;
                     e.target.disabled = true;
-                    await appState.supabase.from('queue').delete().eq('user_id', userId);
+                    try {
+                        const { error } = await appState.supabase.from('queue').delete().eq('user_id', userId);
+                        if (error) throw error;
+                        showQueueMessage('QUEUE_LEAVE_SUCCESS', 'success');
+                    } catch (err) { handleDatabaseError(err, 'leaveQueueFromList'); }
                 }
             });
 
@@ -307,10 +324,11 @@
             const password = UIElements.passwordInput.value;
             
             try {
-                const { error } = await appState.supabase.auth.signInWithPassword({ email, password });
+                const { data, error } = await appState.supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
             } catch (error) {
                 showError('Correo o contraseña incorrectos.');
+            } finally {
                 setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
             }
         }
@@ -362,25 +380,26 @@
         function setupAppListeners() {
             cleanupAllListeners();
             const channel = appState.supabase.channel('public-tables-channel');
-            channel.on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchAndRenderQueue)
-                   .on('postgres_changes', { event: '*', schema: 'public', table: 'active_user' }, fetchAndRenderActiveUser)
-                   .subscribe((status) => {
-                        appState.isConnected = (status === 'SUBSCRIBED');
-                        updateConnectionUI();
-                   });
+            channel
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchAndRenderQueue)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'active_user' }, fetchAndRenderActiveUser)
+                .subscribe((status) => {
+                    appState.isConnected = (status === 'SUBSCRIBED');
+                    updateConnectionUI();
+                });
             appState.listeners.channel = channel;
         }
 
         async function fetchAndRenderQueue() {
             const { data, error } = await appState.supabase.from('queue').select('*').order('joined_at', { ascending: true });
-            if (error) return console.error('Error fetching queue:', error);
+            if (error) return handleDatabaseError(error, 'fetchQueue');
             appState.localQueue = data || [];
             renderQueue();
         }
 
         async function fetchAndRenderActiveUser() {
              const { data, error } = await appState.supabase.from('active_user').select('*').limit(1).single();
-             if (error && error.code !== 'PGRST116') console.error('Error fetching active user:', error);
+             if (error && error.code !== 'PGRST116') return handleDatabaseError(error, 'fetchActiveUser');
              appState.localActiveUser = data;
              handleActiveUserChange();
         }
@@ -394,7 +413,7 @@
                 const { error } = await appState.supabase.from('queue').upsert({ user_id: currentUser.id, email: currentUser.email, joined_at: new Date().toISOString() });
                 if (error) throw error;
                 showNotification('Te uniste a la cola.', 'success');
-                promoteNextUser();
+                await promoteNextUser();
             } catch (error) {
                 showNotification('Error al unirte a la cola.', 'error');
             } finally {
@@ -403,22 +422,11 @@
         }
         
         async function promoteNextUser() {
-             const { data: activeUser, error: activeUserError } = await appState.supabase.from('active_user').select('user_id').limit(1).single();
-             if(activeUserError && activeUserError.code !== 'PGRST116') return console.error(activeUserError);
-             if(activeUser && activeUser.user_id) return;
-
-             const { data: queue, error: queueError } = await appState.supabase.from('queue').select('user_id, email').order('joined_at').limit(1);
-             if(queueError || queue.length === 0) return;
-             
-             const nextInLine = queue[0];
-             const { error: updateError } = await appState.supabase.from('active_user').update({
-                user_id: nextInLine.user_id, email: nextInLine.email, is_paused: false,
-                remaining_time: TURN_TIME_SECONDS, last_updated: new Date().toISOString(), pauses_used: 0
-             }).eq('id', 1);
-
-             if(!updateError) {
-                await appState.supabase.from('queue').delete().eq('user_id', nextInLine.user_id);
-             }
+            const { data, error } = await appState.supabase.rpc('promote_next_user');
+            if (error) {
+                Logger.error('promoteNextUser RPC', error);
+                showError("Error al intentar promover al siguiente usuario.");
+            }
         }
         
         function handleActiveUserChange() {
@@ -464,8 +472,9 @@
         }
 
         async function toggleTimerPause(shouldPause) {
-            const { data: currentTurn } = await supabase.from('active_user').select('*').limit(1).single();
+            const { data: currentTurn } = await appState.supabase.from('active_user').select('*').limit(1).single();
             if(!currentTurn || currentTurn.user_id !== appState.currentUser.id || currentTurn.is_paused === shouldPause) return;
+
             let updates = { is_paused: shouldPause };
             if(shouldPause) {
                 if(currentTurn.pauses_used >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
@@ -474,7 +483,7 @@
                 updates.pauses_used = currentTurn.pauses_used + 1;
             }
             updates.last_updated = new Date().toISOString();
-            await supabase.from('active_user').update(updates).eq('id', 1);
+            await appState.supabase.from('active_user').update(updates).eq('id', 1);
         }
 
         async function leaveTurn() {
@@ -528,9 +537,9 @@
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 const isPaused = data.is_paused || false;
                 UIElements.timerControls.innerHTML = `
-                    <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg...></svg>Pausar</button>
-                    <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg...></svg>Reanudar</button>
-                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn" data-original-text="Ceder Turno"><svg...></svg>Ceder Turno</button>`;
+                    <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5m5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5"/></svg>Pausar</button>
+                    <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>Reanudar</button>
+                    <button id="leaveTurnBtn" class="timer-btn leave-turn-btn" data-original-text="Ceder Turno"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>Ceder Turno</button>`;
                 if(isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
             } else {
@@ -594,6 +603,13 @@
             appState.timers.pageClock = setInterval(() => {
                 UIElements.currentTime.textContent = new Date().toLocaleString('es-DO', { dateStyle: 'long', timeStyle: 'short' });
             }, 1000);
+        }
+        
+        function getFriendlyAuthError(errorCode) {
+            const errors = {
+                'invalid-login-credentials': 'Correo o contraseña incorrectos.',
+            };
+            return errors[errorCode] || 'Ocurrió un error. Por favor, inténtalo de nuevo.';
         }
         
         function setButtonLoading(button, isLoading, loadingText = '') {
