@@ -225,7 +225,6 @@
     <script type="module">
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-        // --- CONSTANTES Y CONFIGURACIÓN ---
         const SUPABASE_URL = 'https://sxxjunfkgskebfitxsuc.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4eGp1bmZrZ3NrZWJmaXR4c3VjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MzE5OTYsImV4cCI6MjA2NzUwNzk5Nn0.BaLTJIatIlgcQF7hdcf6FheW0aDGvLpT6H2pxyyZsjY';
 
@@ -258,8 +257,6 @@
             loginButtonText: document.getElementById('loginButtonText'),
         };
 
-        // --- INICIALIZACIÓN ---
-        
         document.addEventListener('DOMContentLoaded', startApp);
         
         function startApp() {
@@ -301,12 +298,6 @@
                 if (targetButton.id === 'resumeTimerBtn') toggleTimerPause(false);
                 if (targetButton.id === 'leaveTurnBtn') leaveTurn();
             });
-        }
-        
-        function updateConnectionUI() {
-            const statusEl = UIElements.connectionStatus;
-            statusEl.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-            statusEl.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
         }
         
         async function handleAuthStateChange(user) {
@@ -588,21 +579,15 @@
             }
         }
 
-function startHeartbeat(user) {
-    clearInterval(appState.timers.heartbeat);
-    appState.timers.heartbeat = setInterval(async () => {
-        if (appState.currentUser && appState.isConnected) {
-            // Se usa await y se revisa el objeto de error retornado por Supabase
-            const { error } = await appState.supabase
-                .from('active_sessions')
-                .upsert({ user_id: user.id, last_heartbeat: new Date().toISOString() });
-
-            if (error) {
-                Logger.error('heartbeat', error);
-            }
+        function startHeartbeat(user) {
+            clearInterval(appState.timers.heartbeat);
+            appState.timers.heartbeat = setInterval(async () => {
+                if (appState.currentUser) {
+                    const { error } = await appState.supabase.from('active_sessions').upsert({ user_id: user.id, last_heartbeat: new Date().toISOString() });
+                    if(error) Logger.error('heartbeat', error);
+                }
+            }, HEARTBEAT_INTERVAL_MS);
         }
-    }, HEARTBEAT_INTERVAL_MS);
-}
 
         function startPageClock() {
             clearInterval(appState.timers.pageClock);
@@ -614,9 +599,7 @@ function startHeartbeat(user) {
         function setButtonLoading(button, isLoading, loadingText = '') {
             if (!button) return;
             const originalText = button.dataset.originalText || button.textContent;
-            if (!button.dataset.originalText) {
-                button.dataset.originalText = originalText;
-            }
+            if (!button.dataset.originalText) button.dataset.originalText = originalText;
             button.disabled = isLoading;
             button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
