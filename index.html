@@ -588,13 +588,21 @@
             }
         }
 
-        function startHeartbeat(user) {
-            clearInterval(appState.timers.heartbeat);
-            appState.timers.heartbeat = setInterval(() => {
-                appState.supabase.from('active_sessions').upsert({ user_id: user.id, last_heartbeat: new Date().toISOString() })
-                    .catch(err => Logger.error('heartbeat', err));
-            }, HEARTBEAT_INTERVAL_MS);
+function startHeartbeat(user) {
+    clearInterval(appState.timers.heartbeat);
+    appState.timers.heartbeat = setInterval(async () => {
+        if (appState.currentUser && appState.isConnected) {
+            // Se usa await y se revisa el objeto de error retornado por Supabase
+            const { error } = await appState.supabase
+                .from('active_sessions')
+                .upsert({ user_id: user.id, last_heartbeat: new Date().toISOString() });
+
+            if (error) {
+                Logger.error('heartbeat', error);
+            }
         }
+    }, HEARTBEAT_INTERVAL_MS);
+}
 
         function startPageClock() {
             clearInterval(appState.timers.pageClock);
