@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos con Supabase</title>
+    <title>Sistema de Turnos vFinal</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
@@ -240,6 +240,7 @@
             originalTitle: document.title,
             timers: {}, listeners: {},
             localQueue: [], localActiveUser: null,
+            previousActiveUser: null,
         };
 
         const UIElements = {
@@ -257,8 +258,6 @@
             loginButtonText: document.getElementById('loginButtonText'),
         };
 
-        // --- INICIALIZACIÓN ---
-        
         document.addEventListener('DOMContentLoaded', startApp);
         
         function startApp() {
@@ -289,6 +288,7 @@
                     try {
                         const { error } = await appState.supabase.from('queue').delete().eq('user_id', userId);
                         if (error) throw error;
+                        updateJoinButtonState();
                     } catch (err) { handleDatabaseError(err, 'leaveQueueFromList'); }
                 }
             });
@@ -300,6 +300,12 @@
                 if (targetButton.id === 'resumeTimerBtn') toggleTimerPause(false);
                 if (targetButton.id === 'leaveTurnBtn') leaveTurn();
             });
+        }
+        
+        function updateConnectionUI() {
+            const statusEl = UIElements.connectionStatus;
+            statusEl.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+            statusEl.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
         }
         
         async function handleAuthStateChange(user) {
@@ -332,17 +338,22 @@
             UIElements.mainContainer.style.display = 'block';
             setupAppListeners();
             fetchInitialData();
+            updateJoinButtonState();
         }
         
         async function handleLogout() {
             setButtonLoading(UIElements.logoutBtn, true);
-            await appState.supabase.from('active_sessions').delete().eq('user_id', appState.currentUser.id);
+            if (appState.currentUser) {
+                await appState.supabase.from('active_sessions').delete().eq('user_id', appState.currentUser.id);
+            }
             await appState.supabase.auth.signOut();
         }
 
         function onUserLoggedOut() {
             cleanupAll();
             appState.currentUser = null;
+            appState.localActiveUser = null;
+            appState.localQueue = [];
             UIElements.mainContainer.style.display = 'none';
             UIElements.loginModal.style.display = 'flex';
             UIElements.emailInput.value = '';
@@ -430,6 +441,7 @@
 
             renderActiveUserUI();
             updateSummaryPanel();
+            updateJoinButtonState();
 
             if (activeUserData && activeUserData.user_id) {
                 if (activeUserData.is_paused) {
@@ -448,15 +460,24 @@
         
         function startOptimizedTimer(activeUserData) {
             let lastUpdate = 0;
+            const startTime = new Date();
+            const initialRemaining = activeUserData.remaining_time;
+
             function timerLoop(timestamp) {
                 if (appState.timers.activeUserAnimationFrame === null) return;
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
-                    const elapsed = Math.floor((new Date() - new Date(activeUserData.last_updated)) / 1000);
-                    const remaining = activeUserData.remaining_time - elapsed;
+                    const elapsedSinceStart = Math.floor((new Date() - startTime) / 1000);
+                    const remaining = Math.max(0, initialRemaining - elapsedSinceStart);
+                    
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
                     lastUpdate = timestamp;
-                    if (remaining <= 0) leaveTurn();
+                    if (remaining <= 0) {
+                        if (activeUserData.user_id === appState.currentUser?.id) {
+                            showNotification('Tu turno ha terminado', 'warning');
+                            leaveTurn();
+                        }
+                    }
                 }
                 appState.timers.activeUserAnimationFrame = requestAnimationFrame(timerLoop);
             }
@@ -478,8 +499,16 @@
         }
 
         async function leaveTurn() {
-            setButtonLoading(document.getElementById('leaveTurnBtn'), true);
-            await appState.supabase.from('active_user').update({ user_id: null, email: null, remaining_time: null, is_paused: false, last_updated: null, pauses_used: 0 }).eq('id', 1);
+            const leaveBtn = document.getElementById('leaveTurnBtn');
+            if(leaveBtn) setButtonLoading(leaveBtn, true);
+            try {
+                await appState.supabase.from('active_user').update({ user_id: null, email: null, remaining_time: null, is_paused: false, last_updated: null, pauses_used: 0 }).eq('id', 1);
+                await promoteNextUser();
+            } catch (error) {
+                handleDatabaseError(error, 'leaveTurn');
+            } finally {
+                if(leaveBtn) setButtonLoading(leaveBtn, false, 'Ceder Turno');
+            }
         }
 
         function renderQueue() {
@@ -652,13 +681,6 @@
         function handleDatabaseError(error, context) {
             console.error(`Error de BD en ${context}:`, error);
             showError(`Error de base de datos en: ${context}. Revisa la consola.`);
-        }
-
-        // CORRECCIÓN: Se añade la función que faltaba
-        function updateConnectionUI() {
-            const statusEl = UIElements.connectionStatus;
-            statusEl.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
-            statusEl.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
         }
     </script>
 </body>
