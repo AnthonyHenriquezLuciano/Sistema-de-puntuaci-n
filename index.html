@@ -233,18 +233,6 @@
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         
-        const MESSAGES = {
-            QUEUE_JOIN_SUCCESS: 'Te uniste a la cola.', QUEUE_JOIN_ERROR: 'Error al unirte a la cola.',
-            QUEUE_LEAVE_SUCCESS: 'Has salido de la cola.', TURN_NOTIFICATION: '¡Es tu turno!',
-            PAUSE_LIMIT_REACHED: 'Has alcanzado el límite de pausas para este turno.',
-            PAUSE_TIME_EXPIRED: 'El tiempo de pausa ha terminado. Tu turno se ha reanudado.'
-        };
-        
-        const Logger = {
-            error: (context, error, metadata = {}) => console.error(`[${new Date().toISOString()}] CONTEXT: ${context} | ERROR:`, error, "| METADATA:", metadata),
-            info: (message, metadata = {}) => console.info(`[${new Date().toISOString()}] INFO: ${message}`, metadata)
-        };
-
         const appState = {
             supabase: null, currentUser: null,
             isConnected: true,
@@ -664,6 +652,13 @@
         function handleDatabaseError(error, context) {
             console.error(`Error de BD en ${context}:`, error);
             showError(`Error de base de datos en: ${context}. Revisa la consola.`);
+        }
+
+        // CORRECCIÓN: Se añade la función que faltaba
+        function updateConnectionUI() {
+            const statusEl = UIElements.connectionStatus;
+            statusEl.textContent = appState.isConnected ? '🟢 Conectado' : '🔴 Desconectado';
+            statusEl.className = `connection-status ${appState.isConnected ? 'connected' : 'disconnected'}`;
         }
     </script>
 </body>
