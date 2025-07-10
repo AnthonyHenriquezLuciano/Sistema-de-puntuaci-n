@@ -584,7 +584,7 @@
             appState.timers.heartbeat = setInterval(async () => {
                 if (appState.currentUser) {
                     const { error } = await appState.supabase.from('active_sessions').upsert({ user_id: user.id, last_heartbeat: new Date().toISOString() });
-                    if(error) Logger.error('heartbeat', error);
+                    if(error) console.error('heartbeat error', error);
                 }
             }, HEARTBEAT_INTERVAL_MS);
         }
@@ -599,7 +599,9 @@
         function setButtonLoading(button, isLoading, loadingText = '') {
             if (!button) return;
             const originalText = button.dataset.originalText || button.textContent;
-            if (!button.dataset.originalText) button.dataset.originalText = originalText;
+            if (!button.dataset.originalText) {
+                button.dataset.originalText = originalText;
+            }
             button.disabled = isLoading;
             button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
@@ -609,10 +611,6 @@
             UIElements.userError.style.display = message ? 'block' : 'none';
         }
         
-        function showQueueMessage(key, type = 'success') {
-            showNotification(MESSAGES[key], type);
-        }
-
         function showNotification(message, type = 'success') {
             const el = UIElements.notification;
             el.textContent = message;
@@ -621,7 +619,7 @@
         }
 
         function showTurnNotification() {
-            showNotification(MESSAGES.TURN_NOTIFICATION, 'success');
+            showNotification('¡Es tu turno!', 'success');
             if (Notification.permission === "granted") {
                 new Notification("Sistema de Turnos", { body: `¡Es tu turno! Tienes ${TURN_TIME_SECONDS/60} minutos.`});
             }
