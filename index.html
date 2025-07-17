@@ -221,7 +221,7 @@
 
         const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
-        const DATABASE_ID = 'turnos_db'; 
+        const DATABASE_ID = 'turnos_db';
         const FUNCTION_ID = '687889bb000f42ae8a5f';
         const COLLECTIONS = {
             QUEUE: '68786591001d1f8ebf65',
@@ -358,8 +358,9 @@
         }
         
         async function setupUserSession(user) {
+            // CORRECCIÓN: Se envían todos los datos requeridos por la colección.
             const sessionData = {
-                userId: user.$id,
+                user_id: user.$id,
                 sessionId: appState.sessionId,
                 lastHeartbeat: new Date().toISOString()
             };
@@ -390,7 +391,7 @@
         }
 
         async function fetchAndRenderQueue() {
-            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joinedAt')]);
+            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joined_at')]);
             appState.localQueue = response.documents;
             renderQueue();
         }
@@ -410,7 +411,7 @@
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
                     userId: currentUser.$id, 
                     email: currentUser.email, 
-                    joinedAt: new Date().toISOString()
+                    joined_at: new Date().toISOString()
                 });
                 showNotification('Te uniste a la cola.', 'success');
                 await promoteNextUser();
@@ -434,7 +435,7 @@
             const wasMyTurn = appState.previousActiveUser?.userId === appState.currentUser?.$id;
             const isMyTurn = activeUserData?.userId === appState.currentUser?.$id;
 
-            if (isMyTurn && !wasMyTurn && !activeUserData.isPaused) {
+            if (isMyTurn && !wasMyTurn && !activeUserData.is_paused) {
                 showTurnNotification();
             }
             appState.previousActiveUser = activeUserData;
@@ -448,8 +449,8 @@
             updateSummaryPanel();
 
             if (activeUserData && activeUserData.userId) {
-                if (activeUserData.isPaused) {
-                     updateTimerDisplayUI(activeUserData.remainingTime);
+                if (activeUserData.is_paused) {
+                     updateTimerDisplayUI(activeUserData.remaining_time);
                      if(activeUserData.userId === appState.currentUser?.$id) {
                         appState.timers.autoResumeTimer = setTimeout(() => toggleTimerPause(false), MAX_PAUSE_DURATION_SECONDS * 1000);
                      }
@@ -467,8 +468,8 @@
             function timerLoop(timestamp) {
                 if (appState.timers.activeUserAnimationFrame === null) return;
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
-                    const elapsed = Math.floor((Date.now() - new Date(activeUserData.lastUpdated).getTime()) / 1000);
-                    const remaining = activeUserData.remainingTime - elapsed;
+                    const elapsed = Math.floor((Date.now() - new Date(activeUserData.last_updated).getTime()) / 1000);
+                    const remaining = activeUserData.remaining_time - elapsed;
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
                     lastUpdate = timestamp;
@@ -485,16 +486,16 @@
 
         async function toggleTimerPause(shouldPause) {
             const currentTurn = appState.localActiveUser;
-            if(!currentTurn || currentTurn.userId !== appState.currentUser.id || currentTurn.isPaused === shouldPause) return;
+            if(!currentTurn || currentTurn.userId !== appState.currentUser.id || currentTurn.is_paused === shouldPause) return;
             
-            let updates = { isPaused: shouldPause };
+            let updates = { is_paused: shouldPause };
             if(shouldPause) {
-                if(currentTurn.pausesUsed >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
-                const elapsed = Math.floor((Date.now() - new Date(currentTurn.lastUpdated).getTime()) / 1000);
-                updates.remainingTime = Math.max(0, currentTurn.remainingTime - elapsed);
-                updates.pausesUsed = currentTurn.pausesUsed + 1;
+                if(currentTurn.pauses_used >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
+                const elapsed = Math.floor((Date.now() - new Date(currentTurn.last_updated).getTime()) / 1000);
+                updates.remaining_time = Math.max(0, currentTurn.remaining_time - elapsed);
+                updates.pauses_used = currentTurn.pauses_used + 1;
             }
-            updates.lastUpdated = new Date().toISOString();
+            updates.last_updated = new Date().toISOString();
             
             await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, currentTurn.$id, updates);
         }
@@ -504,7 +505,7 @@
             if (!activeUser) return;
             setButtonLoading(document.getElementById('leaveTurnBtn'), true);
             await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUser.$id, {
-                userId: null, email: null, remainingTime: null, isPaused: false, lastUpdated: null, pausesUsed: 0
+                userId: null, email: null, remaining_time: null, is_paused: false, last_updated: null, pauses_used: 0
             });
             await promoteNextUser();
         }
@@ -551,9 +552,9 @@
             updateJoinButtonState();
 
             if (data?.userId === appState.currentUser?.id) {
-                const pausesUsed = data.pausesUsed || 0;
+                const pausesUsed = data.pauses_used || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
-                const isPaused = data.isPaused || false;
+                const isPaused = data.is_paused || false;
                 UIElements.timerControls.innerHTML = `
                     <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg ...></svg>Pausar</button>
                     <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg ...></svg>Reanudar</button>
@@ -561,7 +562,7 @@
                 if(isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
             } else {
-                UIElements.timerControls.innerHTML = data?.isPaused ? '<i>Turno en pausa</i>' : '';
+                UIElements.timerControls.innerHTML = data?.is_paused ? '<i>Turno en pausa</i>' : '';
             }
         }
         
@@ -685,3 +686,4 @@
     </script>
 </body>
 </html>
+
