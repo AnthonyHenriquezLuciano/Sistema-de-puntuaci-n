@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos vFinal</title>
+    <title>Sistema de Turnos vProduccion</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
@@ -217,7 +217,7 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        import { Client, Account, Databases, ID, Query, AppwriteException, Functions } from "https://cdn.skypack.dev/appwrite";
+        import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
         const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
@@ -233,6 +233,7 @@
         const MAX_PAUSE_DURATION_SECONDS = 30;
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+        const SYNC_CHECK_INTERVAL_MS = 30 * 1000;
         
         const appState = {
             client: null, account: null, databases: null, functions: null, currentUser: null,
@@ -293,6 +294,7 @@
                     if (!userId) return;
                     e.target.disabled = true;
                     await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, userId);
+                    updateJoinButtonState();
                 }
             });
 
@@ -336,6 +338,8 @@
             UIElements.mainContainer.style.display = 'block';
             setupAppListeners();
             fetchInitialData();
+            startSyncCheck();
+            updateJoinButtonState();
         }
         
         async function handleLogout() {
@@ -437,7 +441,7 @@
             if (isMyTurn && !wasMyTurn && !activeUserData.isPaused) {
                 showTurnNotification();
             }
-            appState.previousActiveUser = activeUserData;
+            appState.previousActiveUser = { ...activeUserData };
 
             cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
             appState.timers.activeUserAnimationFrame = null;
@@ -446,6 +450,7 @@
 
             renderActiveUserUI();
             updateSummaryPanel();
+            updateJoinButtonState();
 
             if (activeUserData && activeUserData.userId) {
                 if (activeUserData.isPaused) {
@@ -464,18 +469,24 @@
         
         function startOptimizedTimer(activeUserData) {
             let lastUpdate = 0;
+            const startTime = new Date(activeUserData.lastUpdated).getTime();
+            const initialRemaining = activeUserData.remainingTime;
+
             function timerLoop(timestamp) {
                 if (appState.timers.activeUserAnimationFrame === null) return;
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
-                    const elapsed = Math.floor((Date.now() - new Date(activeUserData.lastUpdated).getTime()) / 1000);
-                    const remaining = activeUserData.remainingTime - elapsed;
+                    const elapsedSinceStart = Math.floor((Date.now() - startTime) / 1000);
+                    const remaining = Math.max(0, initialRemaining - elapsedSinceStart);
+                    
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
                     lastUpdate = timestamp;
                     if (remaining <= 0) {
                         if (activeUserData.userId === appState.currentUser?.$id) {
+                            showNotification('Tu turno ha terminado', 'warning');
                             leaveTurn();
                         }
+                        return;
                     }
                 }
                 appState.timers.activeUserAnimationFrame = requestAnimationFrame(timerLoop);
@@ -493,6 +504,10 @@
                 const elapsed = Math.floor((Date.now() - new Date(currentTurn.lastUpdated).getTime()) / 1000);
                 updates.remainingTime = Math.max(0, currentTurn.remainingTime - elapsed);
                 updates.pausesUsed = currentTurn.pausesUsed + 1;
+                updates.pause_start_time = new Date().toISOString();
+            } else {
+                clearTimeout(appState.timers.autoResumeTimer);
+                updates.pause_start_time = null;
             }
             updates.lastUpdated = new Date().toISOString();
             
@@ -529,7 +544,7 @@
             if (!queueItem || !queueItem.userId) return null;
             const tr = document.createElement('tr');
             tr.dataset.key = queueItem.userId;
-            const isCurrentUser = appState.currentUser?.id === queueItem.userId;
+            const isCurrentUser = appState.currentUser?.$id === queueItem.userId;
             if (isCurrentUser) tr.className = 'current-user';
             const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.userId}">Salir</button>` : 'En espera';
             const joinedTime = new Date(queueItem.joinedAt).toLocaleTimeString('es-DO');
@@ -578,7 +593,7 @@
                 if (activeUser.isPaused) {
                     remainingTime = activeUser.remainingTime;
                 } else if (activeUser.lastUpdated) {
-                    const elapsed = Math.floor((Date.now() - activeUser.lastUpdated) / 1000);
+                    const elapsed = Math.floor((Date.now() - new Date(activeUser.lastUpdated).getTime()) / 1000);
                     remainingTime = Math.max(0, activeUser.remainingTime - elapsed);
                 }
                 estimatedWaitSeconds += remainingTime;
@@ -612,7 +627,7 @@
             appState.timers.heartbeat = setInterval(async () => {
                 if (appState.currentUser) {
                     try {
-                        await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { lastHeartbeat: Date.now() });
+                        await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { lastHeartbeat: new Date().toISOString() });
                     } catch (error) {
                         console.error('Heartbeat error:', error);
                     }
