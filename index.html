@@ -262,7 +262,7 @@
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT) {
+            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT || APPWRITE_PROJECT_ID === 'TU_PROJECT_ID') {
                 return showErrorScreen("Las credenciales de Appwrite no están configuradas.");
             }
             appState.client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
