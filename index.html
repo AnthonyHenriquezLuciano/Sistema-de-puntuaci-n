@@ -217,17 +217,16 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        import { Client, Account, Databases, ID, Query } from "https://cdn.skypack.dev/appwrite";
+        import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
-        // CORRECCIÓN: Usar las credenciales correctas de tu proyecto
-        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
+        const APPWRITE_PROJECT_ID = '6695e86d001c5b5d56d1';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
-        
-        const DATABASE_ID = 'turnos_db';
+        const DATABASE_ID = 'turnos_db'; 
+        const FUNCTION_ID = '687889bb000f42ae8a5f';
         const COLLECTIONS = {
-            QUEUE: 'queue',
-            ACTIVE_USER: 'active_user',
-            SESSIONS: 'active_sessions'
+            QUEUE: '68786591001d1f8ebf65',
+            ACTIVE_USER: '6878665f001083c0cb2f',
+            SESSIONS: '6878670b00035fe5db1e'
         };
         
         const TURN_TIME_SECONDS = 15 * 60;
@@ -236,7 +235,7 @@
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         
         const appState = {
-            client: null, account: null, databases: null, currentUser: null,
+            client: null, account: null, databases: null, functions: null, currentUser: null,
             sessionId: ID.unique(),
             originalTitle: document.title,
             timers: {}, listeners: {},
@@ -262,12 +261,13 @@
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT) {
+            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT || APPWRITE_PROJECT_ID === 'TU_PROJECT_ID') {
                 return showErrorScreen("Las credenciales de Appwrite no están configuradas.");
             }
             appState.client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
             appState.account = new Account(appState.client);
             appState.databases = new Databases(appState.client);
+            appState.functions = new Functions(appState.client);
             
             addEventListeners();
             startPageClock();
@@ -420,31 +420,22 @@
         
         async function promoteNextUser() {
             try {
-                const activeUser = appState.localActiveUser;
-                if (activeUser && activeUser.userId) return;
-
-                const queue = appState.localQueue;
-                if (queue.length === 0) return;
-                
-                const nextInLine = queue[0];
-                
-                await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUser.$id, {
-                    userId: nextInLine.userId,
-                    email: nextInLine.email,
-                    isPaused: false,
-                    remainingTime: TURN_TIME_SECONDS,
-                    lastUpdated: Date.now(),
-                    pausesUsed: 0
-                });
-
-                await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, nextInLine.$id);
-            } catch (error) {
-                console.error("Error en promoteNextUser:", error);
+                await appState.functions.createExecution(FUNCTION_ID);
+            } catch(e) {
+                console.error("Error al ejecutar la función de promoción:", e);
             }
         }
         
         function handleActiveUserChange() {
             const activeUserData = appState.localActiveUser;
+            const wasMyTurn = appState.previousActiveUser?.userId === appState.currentUser?.$id;
+            const isMyTurn = activeUserData?.userId === appState.currentUser?.$id;
+
+            if (isMyTurn && !wasMyTurn && !activeUserData.isPaused) {
+                showTurnNotification();
+            }
+            appState.previousActiveUser = activeUserData;
+
             cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
             appState.timers.activeUserAnimationFrame = null;
             clearTimeout(appState.timers.autoResumeTimer);
@@ -478,7 +469,11 @@
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
                     lastUpdate = timestamp;
-                    if (remaining <= 0) leaveTurn();
+                    if (remaining <= 0) {
+                        if (activeUserData.userId === appState.currentUser?.$id) {
+                            leaveTurn();
+                        }
+                    }
                 }
                 appState.timers.activeUserAnimationFrame = requestAnimationFrame(timerLoop);
             }
