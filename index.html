@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos con Appwrite</title>
+    <title>Sistema de Turnos vFinal</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
@@ -219,8 +219,10 @@
     <script type="module">
         import { Client, Account, Databases, ID, Query } from "https://cdn.skypack.dev/appwrite";
 
-        const APPWRITE_PROJECT_ID = '6695e86d001c5b5d56d1';
+        // CORRECCIÓN: Usar las credenciales correctas de tu proyecto
+        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
+        
         const DATABASE_ID = 'turnos_db';
         const COLLECTIONS = {
             QUEUE: 'queue',
@@ -402,7 +404,6 @@
             setButtonLoading(UIElements.joinQueueBtn, true, 'Uniéndose...');
             
             try {
-                // Usar $id como ID del documento para evitar duplicados
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
                     userId: currentUser.$id, 
                     email: currentUser.email, 
@@ -427,7 +428,6 @@
                 
                 const nextInLine = queue[0];
                 
-                // Actualizar el documento del usuario activo
                 await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUser.$id, {
                     userId: nextInLine.userId,
                     email: nextInLine.email,
@@ -613,7 +613,11 @@
             clearInterval(appState.timers.heartbeat);
             appState.timers.heartbeat = setInterval(async () => {
                 if (appState.currentUser) {
-                    await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { lastHeartbeat: Date.now() });
+                    try {
+                        await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { lastHeartbeat: Date.now() });
+                    } catch (error) {
+                        console.error('Heartbeat error:', error);
+                    }
                 }
             }, HEARTBEAT_INTERVAL_MS);
         }
