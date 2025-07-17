@@ -217,7 +217,7 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
+        import { Client, Account, Databases, ID, Query, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
         const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
@@ -358,16 +358,19 @@
         }
         
         async function setupUserSession(user) {
+            const sessionData = {
+                userId: user.$id,
+                sessionId: appState.sessionId,
+                lastHeartbeat: new Date().toISOString()
+            };
             try {
-                await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, {
-                    sessionId: appState.sessionId,
-                    lastHeartbeat: Date.now()
-                });
-            } catch {
-                await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, {
-                    sessionId: appState.sessionId,
-                    lastHeartbeat: Date.now()
-                });
+                await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, sessionData);
+            } catch (error) {
+                if (error instanceof AppwriteException && error.code === 409) {
+                    await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, sessionData);
+                } else {
+                    handleDatabaseError(error, 'setupUserSession');
+                }
             }
             startHeartbeat(user);
         }
@@ -407,7 +410,7 @@
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
                     userId: currentUser.$id, 
                     email: currentUser.email, 
-                    joinedAt: Date.now() 
+                    joinedAt: new Date().toISOString()
                 });
                 showNotification('Te uniste a la cola.', 'success');
                 await promoteNextUser();
@@ -464,7 +467,7 @@
             function timerLoop(timestamp) {
                 if (appState.timers.activeUserAnimationFrame === null) return;
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
-                    const elapsed = Math.floor((Date.now() - activeUserData.lastUpdated) / 1000);
+                    const elapsed = Math.floor((Date.now() - new Date(activeUserData.lastUpdated).getTime()) / 1000);
                     const remaining = activeUserData.remainingTime - elapsed;
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
@@ -487,11 +490,11 @@
             let updates = { isPaused: shouldPause };
             if(shouldPause) {
                 if(currentTurn.pausesUsed >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
-                const elapsed = Math.floor((Date.now() - currentTurn.lastUpdated) / 1000);
+                const elapsed = Math.floor((Date.now() - new Date(currentTurn.lastUpdated).getTime()) / 1000);
                 updates.remainingTime = Math.max(0, currentTurn.remainingTime - elapsed);
                 updates.pausesUsed = currentTurn.pausesUsed + 1;
             }
-            updates.lastUpdated = Date.now();
+            updates.lastUpdated = new Date().toISOString();
             
             await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, currentTurn.$id, updates);
         }
