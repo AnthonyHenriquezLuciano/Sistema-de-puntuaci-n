@@ -1,6 +1,0 @@
-{
-  "main": "index.js",
-  "dependencies": {
-    "node-appwrite": "^11.1.0"
-  }
-}
