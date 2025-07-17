@@ -10,9 +10,8 @@ export default async ({ res, log, error }) => {
 
   const DATABASE_ID = 'turnos_db';
   const COLLECTIONS = {
-      QUEUE: 'queue',
-      ACTIVE_USER: 'active_user'
-  };
+      QUEUE: '68786591001d1f8ebf65',
+      ACTIVE_USER: '6878665f001083c0cb2f'
 
   try {
     const activeUserResponse = await databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
