@@ -128,9 +128,6 @@
             background: #f8d7da; color: #721c24; padding: 15px; border-radius: var(--border-radius); 
             margin-bottom: 20px; display: none; border: 1px solid #f5c6cb; 
         }
-        .forgot-password { font-size: 0.9em; margin-top: 15px; }
-        .forgot-password a { color: var(--color-primary); text-decoration: none; }
-        .forgot-password a:hover { text-decoration: underline; }
         .loading-spinner { 
             display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); 
             border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; 
@@ -169,7 +166,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
                 Sistema de Turnos
             </h1>
-            <p>Gestión de colas de espera con sesión única</p>
+            <p>Gestión de colas de espera</p>
         </header>
         <div class="card user-info">
             <div class="user-welcome">
@@ -220,13 +217,11 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        // APPWRITE: Importar la librería de Appwrite
         import { Client, Account, Databases, ID, Query } from "https://cdn.skypack.dev/appwrite";
 
-        // --- CONSTANTES Y CONFIGURACIÓN ---
-        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d'; // ◀️ PEGA AQUÍ TU PROJECT ID
-        const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1'; // ◀️ PEGA AQUÍ TU API ENDPOINT
-        const DATABASE_ID = 'turnos_db'; // El ID que le diste a tu base de datos
+        const APPWRITE_PROJECT_ID = '6695e86d001c5b5d56d1';
+        const APPWRITE_ENDPOINT = 'https://cloud.appwrite.io/v1';
+        const DATABASE_ID = 'turnos_db';
         const COLLECTIONS = {
             QUEUE: 'queue',
             ACTIVE_USER: 'active_user',
@@ -238,21 +233,8 @@
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
         
-        const MESSAGES = {
-            QUEUE_JOIN_SUCCESS: 'Te uniste a la cola.', QUEUE_JOIN_ERROR: 'Error al unirte a la cola.',
-            QUEUE_LEAVE_SUCCESS: 'Has salido de la cola.', TURN_NOTIFICATION: '¡Es tu turno!',
-            PAUSE_LIMIT_REACHED: 'Has alcanzado el límite de pausas para este turno.',
-            PAUSE_TIME_EXPIRED: 'El tiempo de pausa ha terminado. Tu turno se ha reanudado.'
-        };
-        
-        const Logger = {
-            error: (context, error, metadata = {}) => console.error(`[${new Date().toISOString()}] CONTEXT: ${context} | ERROR:`, error, "| METADATA:", metadata),
-            info: (message, metadata = {}) => console.info(`[${new Date().toISOString()}] INFO: ${message}`, metadata)
-        };
-
         const appState = {
             client: null, account: null, databases: null, currentUser: null,
-            isConnected: true,
             sessionId: ID.unique(),
             originalTitle: document.title,
             timers: {}, listeners: {},
@@ -275,12 +257,10 @@
             loginButtonText: document.getElementById('loginButtonText'),
         };
 
-        // --- INICIALIZACIÓN ---
-        
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT || APPWRITE_PROJECT_ID === 'TU_PROJECT_ID') {
+            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT) {
                 return showErrorScreen("Las credenciales de Appwrite no están configuradas.");
             }
             appState.client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
@@ -310,9 +290,7 @@
                     const userId = e.target.dataset.key;
                     if (!userId) return;
                     e.target.disabled = true;
-                    try {
-                        await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, userId);
-                    } catch (err) { handleDatabaseError(err, 'leaveQueueFromList'); }
+                    await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, userId);
                 }
             });
 
@@ -368,8 +346,6 @@
         function onUserLoggedOut() {
             cleanupAll();
             appState.currentUser = null;
-            appState.localActiveUser = null;
-            appState.localQueue = [];
             UIElements.mainContainer.style.display = 'none';
             UIElements.loginModal.style.display = 'flex';
             UIElements.emailInput.value = '';
@@ -380,9 +356,17 @@
         }
         
         async function setupUserSession(user) {
-            await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, {
-                lastHeartbeat: Date.now()
-            });
+            try {
+                await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, {
+                    sessionId: appState.sessionId,
+                    lastHeartbeat: Date.now()
+                });
+            } catch {
+                await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, {
+                    sessionId: appState.sessionId,
+                    lastHeartbeat: Date.now()
+                });
+            }
             startHeartbeat(user);
         }
 
@@ -396,31 +380,20 @@
             const queueChannel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.QUEUE}.documents`;
             const activeUserChannel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.ACTIVE_USER}.documents`;
 
-            const queueUnsubscribe = appState.client.subscribe(queueChannel, () => fetchAndRenderQueue());
-            const activeUserUnsubscribe = appState.client.subscribe(activeUserChannel, () => fetchAndRenderActiveUser());
-
-            appState.listeners.queue = queueUnsubscribe;
-            appState.listeners.activeUser = activeUserUnsubscribe;
+            appState.listeners.queue = appState.client.subscribe(queueChannel, fetchAndRenderQueue);
+            appState.listeners.activeUser = appState.client.subscribe(activeUserChannel, fetchAndRenderActiveUser);
         }
 
         async function fetchAndRenderQueue() {
-            try {
-                const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joinedAt')]);
-                appState.localQueue = response.documents;
-                renderQueue();
-            } catch (error) {
-                handleDatabaseError(error, 'fetchQueue');
-            }
+            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joinedAt')]);
+            appState.localQueue = response.documents;
+            renderQueue();
         }
 
         async function fetchAndRenderActiveUser() {
-             try {
-                const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
-                appState.localActiveUser = response.documents[0] || null;
-                handleActiveUserChange();
-             } catch(error) {
-                handleDatabaseError(error, 'fetchActiveUser');
-             }
+             const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
+             appState.localActiveUser = response.documents[0] || null;
+             handleActiveUserChange();
         }
 
         async function joinQueue() {
@@ -429,6 +402,7 @@
             setButtonLoading(UIElements.joinQueueBtn, true, 'Uniéndose...');
             
             try {
+                // Usar $id como ID del documento para evitar duplicados
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
                     userId: currentUser.$id, 
                     email: currentUser.email, 
@@ -437,7 +411,7 @@
                 showNotification('Te uniste a la cola.', 'success');
                 await promoteNextUser();
             } catch (error) {
-                showNotification('Error al unirte a la cola.', 'error');
+                showNotification('Error: Ya estás en la cola.', 'error');
             } finally {
                 setButtonLoading(UIElements.joinQueueBtn, false, '📝 Unirse a la Cola');
             }
@@ -445,16 +419,16 @@
         
         async function promoteNextUser() {
             try {
-                const activeUserResponse = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
-                if (activeUserResponse.documents.length > 0 && activeUserResponse.documents[0].userId) return;
+                const activeUser = appState.localActiveUser;
+                if (activeUser && activeUser.userId) return;
 
-                const queueResponse = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joinedAt'), Query.limit(1)]);
-                if (queueResponse.documents.length === 0) return;
-
-                const nextInLine = queueResponse.documents[0];
+                const queue = appState.localQueue;
+                if (queue.length === 0) return;
                 
-                // Actualizar el documento del usuario activo (que siempre existe)
-                await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, appState.localActiveUser.$id, {
+                const nextInLine = queue[0];
+                
+                // Actualizar el documento del usuario activo
+                await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUser.$id, {
                     userId: nextInLine.userId,
                     email: nextInLine.email,
                     isPaused: false,
@@ -463,9 +437,7 @@
                     pausesUsed: 0
                 });
 
-                // Eliminar al usuario de la cola
                 await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, nextInLine.$id);
-
             } catch (error) {
                 console.error("Error en promoteNextUser:", error);
             }
@@ -656,7 +628,9 @@
         function setButtonLoading(button, isLoading, loadingText = '') {
             if (!button) return;
             const originalText = button.dataset.originalText || button.textContent;
-            if (!button.dataset.originalText) button.dataset.originalText = originalText;
+            if (!button.dataset.originalText) {
+                button.dataset.originalText = originalText;
+            }
             button.disabled = isLoading;
             button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
@@ -703,7 +677,7 @@
         }
 
         function handleDatabaseError(error, context) {
-            Logger.error(context, error);
+            console.error(`Error de BD en ${context}:`, error);
             showError(`Error de base de datos en: ${context}. Revisa la consola.`);
         }
     </script>
