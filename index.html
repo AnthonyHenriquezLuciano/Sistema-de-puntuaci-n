@@ -221,7 +221,7 @@
 
         const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
-        const DATABASE_ID = 'turnos_db'; 
+        const DATABASE_ID = 'turnos_db';
         const FUNCTION_ID = '687889bb000f42ae8a5f';
         const COLLECTIONS = {
             QUEUE: '68786591001d1f8ebf65',
@@ -262,7 +262,7 @@
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT || APPWRITE_PROJECT_ID === 'TU_PROJECT_ID') {
+            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT) {
                 return showErrorScreen("Las credenciales de Appwrite no están configuradas.");
             }
             appState.client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
@@ -364,8 +364,8 @@
         async function setupUserSession(user) {
             const sessionData = {
                 user_id: user.$id,
-                sessionId: appState.sessionId,
-                lastHeartbeat: new Date().toISOString()
+                session_id: appState.sessionId,
+                last_heartbeat: new Date().toISOString()
             };
             try {
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, sessionData);
@@ -394,7 +394,7 @@
         }
 
         async function fetchAndRenderQueue() {
-            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joined_at')]);
+            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joinedAt')]);
             appState.localQueue = response.documents;
             renderQueue();
         }
@@ -696,6 +696,22 @@
         function handleDatabaseError(error, context) {
             console.error(`Error de BD en ${context}:`, error);
             showError(`Error de base de datos en: ${context}. Revisa la consola.`);
+        }
+
+        function startSyncCheck() {
+            clearInterval(appState.timers.syncCheck);
+            appState.timers.syncCheck = setInterval(async () => {
+                if (appState.localActiveUser && appState.localActiveUser.userId) {
+                    const { data: currentActiveUser } = await appState.databases
+                        .from('active_user')
+                        .select('userId')
+                        .limit(1)
+                        .single();
+                    if (currentActiveUser && currentActiveUser.userId !== appState.localActiveUser.userId) {
+                        await fetchAndRenderActiveUser();
+                    }
+                }
+            }, SYNC_CHECK_INTERVAL_MS);
         }
     </script>
 </body>
