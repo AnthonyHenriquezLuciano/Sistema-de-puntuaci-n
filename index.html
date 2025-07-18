@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos vProduccion</title>
+    <title>Sistema de Turnos con Nhost</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
-            --color-primary: #f02e65; --color-secondary: #ff8e64; --color-background: #F0F4F8; 
+            --color-primary: #3b82f6; --color-secondary: #60a5fa; --color-background: #F0F4F8; 
             --color-surface: #FFFFFF; --color-text-primary: #212529; --color-text-secondary: #6c757d; 
             --color-success: #28a745; --color-danger: #dc3545; --color-warning: #ffc107; 
             --shadow: 0 4px 12px rgba(0, 0, 0, 0.08); --border-radius: 8px; 
@@ -71,7 +71,7 @@
             border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; 
             display: flex; align-items: center; gap: 8px; 
         }
-        .timer-btn:hover:not(:disabled) { background-color: #d4004b; }
+        .timer-btn:hover:not(:disabled) { background-color: #2563eb; }
         .timer-btn:disabled { background: #6c757d; cursor: not-allowed; }
         .leave-turn-btn { background-color: var(--color-danger); }
         .leave-turn-btn:hover:not(:disabled) { background-color: #c82333; }
@@ -80,7 +80,7 @@
         .queue-table th, .queue-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
         .queue-table th { background-color: var(--color-primary); color: white; font-weight: 500; }
         .queue-table tr:nth-of-type(even) { background-color: var(--color-background); }
-        .queue-table tr.current-user { background-color: #ffdde9; font-weight: 500; }
+        .queue-table tr.current-user { background-color: #dbeafe; font-weight: 500; }
         .join-queue-btn { 
             background-color: var(--color-success); color: white; border: none; padding: 12px 24px; 
             border-radius: var(--border-radius); cursor: pointer; font-size: 1.1em; margin-top: 20px; 
@@ -115,14 +115,14 @@
             transition: border-color 0.2s ease, box-shadow 0.2s ease; 
         }
         .login-input:focus { 
-            outline: none; border-color: var(--color-secondary); box-shadow: 0 0 0 3px rgba(240, 46, 101, 0.2); 
+            outline: none; border-color: var(--color-secondary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); 
         }
         .login-btn { 
             background-color: var(--color-primary); color: white; border: none; padding: 15px 30px; 
             border-radius: var(--border-radius); font-size: 1.1em; cursor: pointer; 
             transition: background-color 0.2s ease; width: 100%; font-weight: 500; 
         }
-        .login-btn:hover { background-color: #d4004b; }
+        .login-btn:hover { background-color: #2563eb; }
         .login-btn:disabled { background: #6c757d; cursor: not-allowed; }
         .error-message { 
             background: #f8d7da; color: #721c24; padding: 15px; border-radius: var(--border-radius); 
@@ -217,27 +217,19 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
+        import { NhostClient } from 'https://cdn.jsdelivr.net/npm/@nhost/nhost-js/+esm';
 
-        const APPWRITE_PROJECT_ID = '6695e86d001c5b5d56d1';
-        const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
-        const DATABASE_ID = 'turnos_db';
-        const FUNCTION_ID = '687889bb000f42ae8a5f';
-        const COLLECTIONS = {
-            QUEUE: '68786591001d1f8ebf65',
-            ACTIVE_USER: '6878665f001083c0cb2f',
-            SESSIONS: '6878670b00035fe5db1e'
-        };
-        
+        // --- CONSTANTES Y CONFIGURACIÓN ---
+        const NHOST_BACKEND_URL = 'https://iagvohxmjnoxaxbqbxza.hasura.us-west-2.nhost.run/v1beta1/relay'; // ◀️ PEGA AQUÍ TU BACKEND URL
+
         const TURN_TIME_SECONDS = 15 * 60;
         const MAX_PAUSE_DURATION_SECONDS = 30;
         const MAX_PAUSES_PER_TURN = 2;
         const HEARTBEAT_INTERVAL_MS = 30 * 1000;
-        const SYNC_CHECK_INTERVAL_MS = 30 * 1000;
         
         const appState = {
-            client: null, account: null, databases: null, functions: null, currentUser: null,
-            sessionId: ID.unique(),
+            nhost: null, currentUser: null,
+            sessionId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             originalTitle: document.title,
             timers: {}, listeners: {},
             localQueue: [], localActiveUser: null,
@@ -259,27 +251,22 @@
             loginButtonText: document.getElementById('loginButtonText'),
         };
 
+        // --- INICIALIZACIÓN ---
+        
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT) {
-                return showErrorScreen("Las credenciales de Appwrite no están configuradas.");
+            if (!NHOST_BACKEND_URL || NHOST_BACKEND_URL === 'URL_DE_TU_BACKEND') {
+                return showErrorScreen("La URL del backend de Nhost no está configurada.");
             }
-            appState.client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
-            appState.account = new Account(appState.client);
-            appState.databases = new Databases(appState.client);
-            appState.functions = new Functions(appState.client);
-            
+            appState.nhost = new NhostClient({ backendUrl: NHOST_BACKEND_URL });
             addEventListeners();
             startPageClock();
             requestNotificationPermission();
             
-            try {
-                const user = await appState.account.get();
-                handleAuthStateChange(user);
-            } catch {
-                handleAuthStateChange(null);
-            }
+            appState.nhost.auth.onAuthStateChange((event, session) => {
+                handleAuthStateChange(session?.user || null);
+            });
         }
         
         function addEventListeners() {
@@ -293,8 +280,7 @@
                     const userId = e.target.dataset.key;
                     if (!userId) return;
                     e.target.disabled = true;
-                    await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, userId);
-                    updateJoinButtonState();
+                    await leaveQueue(userId);
                 }
             });
 
@@ -318,9 +304,8 @@
             const password = UIElements.passwordInput.value;
             
             try {
-                await appState.account.createEmailPasswordSession(email, password);
-                const user = await appState.account.get();
-                handleAuthStateChange(user);
+                const { error } = await appState.nhost.auth.signIn({ email, password });
+                if (error) throw error;
             } catch (error) {
                 showError('Correo o contraseña incorrectos.');
             } finally {
@@ -329,7 +314,7 @@
         }
 
         async function onUserLoggedIn(user) {
-            if (!user || appState.currentUser?.$id === user.$id) return;
+            if (!user || appState.currentUser?.id === user.id) return;
             cleanupAll();
             appState.currentUser = user;
             await setupUserSession(user);
@@ -338,15 +323,11 @@
             UIElements.mainContainer.style.display = 'block';
             setupAppListeners();
             fetchInitialData();
-            startSyncCheck();
-            updateJoinButtonState();
         }
         
         async function handleLogout() {
             setButtonLoading(UIElements.logoutBtn, true);
-            await appState.databases.deleteDocument(DATABASE_ID, COLLECTIONS.SESSIONS, appState.currentUser.$id);
-            await appState.account.deleteSession('current');
-            handleAuthStateChange(null);
+            await appState.nhost.auth.signOut();
         }
 
         function onUserLoggedOut() {
@@ -362,20 +343,20 @@
         }
         
         async function setupUserSession(user) {
-            const sessionData = {
-                user_id: user.$id,
-                session_id: appState.sessionId,
-                last_heartbeat: new Date().toISOString()
-            };
-            try {
-                await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, sessionData);
-            } catch (error) {
-                if (error instanceof AppwriteException && error.code === 409) {
-                    await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, sessionData);
-                } else {
-                    handleDatabaseError(error, 'setupUserSession');
+            const mutation = `
+                mutation InsertSession($session: active_sessions_insert_input!) {
+                    insert_active_sessions_one(object: $session, on_conflict: { constraint: active_sessions_pkey, update_columns: [session_id, last_heartbeat] }) {
+                        user_id
+                    }
                 }
-            }
+            `;
+            await appState.nhost.graphql.request(mutation, {
+                session: {
+                    user_id: user.id,
+                    session_id: appState.sessionId,
+                    last_heartbeat: new Date().toISOString()
+                }
+            });
             startHeartbeat(user);
         }
 
@@ -386,23 +367,39 @@
         
         function setupAppListeners() {
             cleanupAllListeners();
-            const queueChannel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.QUEUE}.documents`;
-            const activeUserChannel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.ACTIVE_USER}.documents`;
+            
+            const GET_QUEUE = `subscription GetQueue { queue(order_by: {joined_at: asc}) { user_id email joined_at } }`;
+            const GET_ACTIVE_USER = `subscription GetActiveUser { active_user(limit: 1) { id user_id email remaining_time is_paused pauses_used last_updated } }`;
 
-            appState.listeners.queue = appState.client.subscribe(queueChannel, fetchAndRenderQueue);
-            appState.listeners.activeUser = appState.client.subscribe(activeUserChannel, fetchAndRenderActiveUser);
+            appState.listeners.queue = appState.nhost.graphql.subscribe(GET_QUEUE).subscribe({
+                next: ({ data }) => {
+                    appState.localQueue = data.queue;
+                    renderQueue();
+                },
+                error: (error) => console.error("Error en subscripción de cola:", error)
+            });
+            
+            appState.listeners.activeUser = appState.nhost.graphql.subscribe(GET_ACTIVE_USER).subscribe({
+                next: ({ data }) => {
+                    appState.localActiveUser = data.active_user[0] || null;
+                    handleActiveUserChange();
+                },
+                error: (error) => console.error("Error en subscripción de usuario activo:", error)
+            });
         }
 
         async function fetchAndRenderQueue() {
-            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joined_at')]);
-            appState.localQueue = response.documents;
+            const GET_QUEUE_QUERY = `query GetQueue { queue(order_by: {joined_at: asc}) { user_id email joined_at } }`;
+            const { data } = await appState.nhost.graphql.request(GET_QUEUE_QUERY);
+            appState.localQueue = data.queue;
             renderQueue();
         }
 
         async function fetchAndRenderActiveUser() {
-             const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
-             appState.localActiveUser = response.documents[0] || null;
-             handleActiveUserChange();
+            const GET_ACTIVE_USER_QUERY = `query GetActiveUser { active_user(limit: 1) { id user_id email remaining_time is_paused pauses_used last_updated } }`;
+            const { data } = await appState.nhost.graphql.request(GET_ACTIVE_USER_QUERY);
+            appState.localActiveUser = data.active_user[0] || null;
+            handleActiveUserChange();
         }
 
         async function joinQueue() {
@@ -410,40 +407,65 @@
             if (!currentUser || UIElements.joinQueueBtn.disabled) return;
             setButtonLoading(UIElements.joinQueueBtn, true, 'Uniéndose...');
             
+            const JOIN_MUTATION = `
+                mutation JoinQueue($user: queue_insert_input!) {
+                    insert_queue_one(object: $user, on_conflict: { constraint: queue_pkey, update_columns: joined_at }) {
+                        user_id
+                    }
+                }
+            `;
             try {
-                await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
-                    user_id: currentUser.$id, 
-                    email: currentUser.email, 
-                    joined_at: new Date().toISOString()
+                await appState.nhost.graphql.request(JOIN_MUTATION, {
+                    user: { user_id: currentUser.id, email: currentUser.email, joined_at: new Date().toISOString() }
                 });
                 showNotification('Te uniste a la cola.', 'success');
                 await promoteNextUser();
             } catch (error) {
-                showNotification('Error: Ya estás en la cola.', 'error');
+                showNotification('Error al unirte a la cola.', 'error');
             } finally {
                 setButtonLoading(UIElements.joinQueueBtn, false, '📝 Unirse a la Cola');
             }
         }
         
         async function promoteNextUser() {
+            // La lógica ahora está en el cliente, replicando el flujo de Firebase
             try {
-                const result = await appState.functions.createExecution(FUNCTION_ID);
-                console.log('Función de promoción ejecutada:', result);
-            } catch(e) {
-                console.error("Error al ejecutar la función de promoción:", e);
+                if (appState.localActiveUser && appState.localActiveUser.user_id) return;
+                if (appState.localQueue.length === 0) return;
+                
+                const nextInLine = appState.localQueue[0];
+                
+                const PROMOTE_MUTATION = `
+                    mutation PromoteUser($userId: uuid!, $email: String!, $updates: active_user_set_input!) {
+                        update_active_user(where: {id: {_eq: 1}, _and: {user_id: {_is_null: true}}}, _set: $updates) {
+                            affected_rows
+                        }
+                        delete_queue_by_pk(user_id: $userId) {
+                            user_id
+                        }
+                    }
+                `;
+
+                const { data } = await appState.nhost.graphql.request(PROMOTE_MUTATION, {
+                    userId: nextInLine.user_id,
+                    email: nextInLine.email,
+                    updates: {
+                        user_id: nextInLine.user_id,
+                        email: nextInLine.email,
+                        is_paused: false,
+                        remaining_time: TURN_TIME_SECONDS,
+                        last_updated: new Date().toISOString(),
+                        pauses_used: 0
+                    }
+                });
+                
+            } catch (error) {
+                console.error("Error en promoteNextUser:", error);
             }
         }
         
         function handleActiveUserChange() {
             const activeUserData = appState.localActiveUser;
-            const wasMyTurn = appState.previousActiveUser?.user_id === appState.currentUser?.$id;
-            const isMyTurn = activeUserData?.user_id === appState.currentUser?.$id;
-
-            if (isMyTurn && !wasMyTurn && !activeUserData.is_paused) {
-                showTurnNotification();
-            }
-            appState.previousActiveUser = { ...activeUserData };
-
             cancelAnimationFrame(appState.timers.activeUserAnimationFrame);
             appState.timers.activeUserAnimationFrame = null;
             clearTimeout(appState.timers.autoResumeTimer);
@@ -451,12 +473,11 @@
 
             renderActiveUserUI();
             updateSummaryPanel();
-            updateJoinButtonState();
 
             if (activeUserData && activeUserData.user_id) {
                 if (activeUserData.is_paused) {
                      updateTimerDisplayUI(activeUserData.remaining_time);
-                     if(activeUserData.user_id === appState.currentUser?.$id) {
+                     if(activeUserData.user_id === appState.currentUser?.id) {
                         appState.timers.autoResumeTimer = setTimeout(() => toggleTimerPause(false), MAX_PAUSE_DURATION_SECONDS * 1000);
                      }
                 } else {
@@ -470,25 +491,15 @@
         
         function startOptimizedTimer(activeUserData) {
             let lastUpdate = 0;
-            const startTime = new Date(activeUserData.last_updated).getTime();
-            const initialRemaining = activeUserData.remaining_time;
-
             function timerLoop(timestamp) {
                 if (appState.timers.activeUserAnimationFrame === null) return;
                 if (!lastUpdate || timestamp - lastUpdate >= 1000) {
-                    const elapsedSinceStart = Math.floor((Date.now() - startTime) / 1000);
-                    const remaining = Math.max(0, initialRemaining - elapsedSinceStart);
-                    
+                    const elapsed = Math.floor((new Date() - new Date(activeUserData.last_updated)) / 1000);
+                    const remaining = activeUserData.remaining_time - elapsed;
                     updateTimerDisplayUI(remaining);
                     updateSummaryPanel();
                     lastUpdate = timestamp;
-                    if (remaining <= 0) {
-                        if (activeUserData.user_id === appState.currentUser?.$id) {
-                            showNotification('Tu turno ha terminado', 'warning');
-                            leaveTurn();
-                        }
-                        return;
-                    }
+                    if (remaining <= 0) leaveTurn();
                 }
                 appState.timers.activeUserAnimationFrame = requestAnimationFrame(timerLoop);
             }
@@ -497,32 +508,31 @@
 
         async function toggleTimerPause(shouldPause) {
             const currentTurn = appState.localActiveUser;
-            if(!currentTurn || currentTurn.user_id !== appState.currentUser.$id || currentTurn.is_paused === shouldPause) return;
+            if(!currentTurn || currentTurn.user_id !== appState.currentUser.id || currentTurn.is_paused === shouldPause) return;
             
             let updates = { is_paused: shouldPause };
             if(shouldPause) {
                 if(currentTurn.pauses_used >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
-                const elapsed = Math.floor((Date.now() - new Date(currentTurn.last_updated).getTime()) / 1000);
+                const elapsed = Math.floor((new Date() - new Date(currentTurn.last_updated)) / 1000);
                 updates.remaining_time = Math.max(0, currentTurn.remaining_time - elapsed);
                 updates.pauses_used = currentTurn.pauses_used + 1;
-                updates.pause_start_time = new Date().toISOString();
-            } else {
-                clearTimeout(appState.timers.autoResumeTimer);
-                updates.pause_start_time = null;
             }
             updates.last_updated = new Date().toISOString();
             
-            await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, currentTurn.$id, updates);
+            const TOGGLE_PAUSE_MUTATION = `mutation TogglePause($updates: active_user_set_input!) { update_active_user_by_pk(pk_columns: {id: 1}, _set: $updates) { id } }`;
+            await appState.nhost.graphql.request(TOGGLE_PAUSE_MUTATION, { updates });
         }
 
         async function leaveTurn() {
-            const activeUser = appState.localActiveUser;
-            if (!activeUser) return;
             setButtonLoading(document.getElementById('leaveTurnBtn'), true);
-            await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUser.$id, {
-                user_id: null, email: null, remaining_time: null, is_paused: false, last_updated: null, pauses_used: 0
-            });
+            const LEAVE_TURN_MUTATION = `mutation LeaveTurn { update_active_user_by_pk(pk_columns: {id: 1}, _set: {user_id: null, email: null, remaining_time: null, is_paused: false, last_updated: null, pauses_used: 0}) { id } }`;
+            await appState.nhost.graphql.request(LEAVE_TURN_MUTATION);
             await promoteNextUser();
+        }
+
+        async function leaveQueue(userId) {
+            const LEAVE_QUEUE_MUTATION = `mutation LeaveQueue($userId: uuid!) { delete_queue_by_pk(user_id: $userId) { user_id } }`;
+            await appState.nhost.graphql.request(LEAVE_QUEUE_MUTATION, { userId });
         }
 
         function renderQueue() {
@@ -545,7 +555,7 @@
             if (!queueItem || !queueItem.user_id) return null;
             const tr = document.createElement('tr');
             tr.dataset.key = queueItem.user_id;
-            const isCurrentUser = appState.currentUser?.$id === queueItem.user_id;
+            const isCurrentUser = appState.currentUser?.id === queueItem.user_id;
             if (isCurrentUser) tr.className = 'current-user';
             const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.user_id}">Salir</button>` : 'En espera';
             const joinedTime = new Date(queueItem.joined_at).toLocaleTimeString('es-DO');
@@ -555,8 +565,8 @@
 
         function updateJoinButtonState() {
             if(!appState.currentUser) return;
-            const isUserInQueue = appState.localQueue.some(user => user.user_id === appState.currentUser.$id);
-            const isUserActive = appState.localActiveUser?.user_id === appState.currentUser.$id;
+            const isUserInQueue = appState.localQueue.some(user => user.user_id === appState.currentUser.id);
+            const isUserActive = appState.localActiveUser?.user_id === appState.currentUser.id;
             UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
         
@@ -566,7 +576,7 @@
             UIElements.pauseInfo.innerHTML = '';
             updateJoinButtonState();
 
-            if (data?.user_id === appState.currentUser?.$id) {
+            if (data?.user_id === appState.currentUser?.id) {
                 const pausesUsed = data.pauses_used || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 const isPaused = data.is_paused || false;
@@ -583,7 +593,7 @@
         
         function updateSummaryPanel() {
              if (!appState.currentUser) { UIElements.summaryPanel.style.display = 'none'; return; }
-            const myQueueIndex = appState.localQueue.findIndex(u => u.user_id === appState.currentUser.$id);
+            const myQueueIndex = appState.localQueue.findIndex(u => u.user_id === appState.currentUser.id);
             if (myQueueIndex === -1) { UIElements.summaryPanel.style.display = 'none'; return; }
             UIElements.summaryPanel.style.display = 'block';
             const usersAhead = myQueueIndex;
@@ -594,7 +604,7 @@
                 if (activeUser.is_paused) {
                     remainingTime = activeUser.remaining_time;
                 } else if (activeUser.last_updated) {
-                    const elapsed = Math.floor((Date.now() - new Date(activeUser.last_updated).getTime()) / 1000);
+                    const elapsed = Math.floor((new Date() - new Date(activeUser.last_updated)) / 1000);
                     remainingTime = Math.max(0, activeUser.remaining_time - elapsed);
                 }
                 estimatedWaitSeconds += remainingTime;
@@ -618,8 +628,8 @@
         }
 
         function cleanupAllListeners() {
-            if (appState.listeners.queue) appState.listeners.queue();
-            if (appState.listeners.activeUser) appState.listeners.activeUser();
+            if(appState.listeners.queue) appState.listeners.queue.unsubscribe();
+            if(appState.listeners.activeUser) appState.listeners.activeUser.unsubscribe();
             appState.listeners = {};
         }
 
@@ -627,11 +637,8 @@
             clearInterval(appState.timers.heartbeat);
             appState.timers.heartbeat = setInterval(async () => {
                 if (appState.currentUser) {
-                    try {
-                        await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { last_heartbeat: new Date().toISOString() });
-                    } catch (error) {
-                        console.error('Heartbeat error:', error);
-                    }
+                    const HEARTBEAT_MUTATION = `mutation Heartbeat($userId: uuid!, $heartbeat: timestamptz!) { update_active_sessions_by_pk(pk_columns: {user_id: $userId}, _set: {last_heartbeat: $heartbeat}) { user_id } }`;
+                    await appState.nhost.graphql.request(HEARTBEAT_MUTATION, { userId: user.id, heartbeat: new Date().toISOString() });
                 }
             }, HEARTBEAT_INTERVAL_MS);
         }
@@ -646,9 +653,7 @@
         function setButtonLoading(button, isLoading, loadingText = '') {
             if (!button) return;
             const originalText = button.dataset.originalText || button.textContent;
-            if (!button.dataset.originalText) {
-                button.dataset.originalText = originalText;
-            }
+            if (!button.dataset.originalText) button.dataset.originalText = originalText;
             button.disabled = isLoading;
             button.innerHTML = isLoading ? `<span class="loading-spinner"></span> ${loadingText}` : originalText;
         }
@@ -697,19 +702,6 @@
         function handleDatabaseError(error, context) {
             console.error(`Error de BD en ${context}:`, error);
             showError(`Error de base de datos en: ${context}. Revisa la consola.`);
-        }
-
-        function startSyncCheck() {
-            clearInterval(appState.timers.syncCheck);
-            appState.timers.syncCheck = setInterval(async () => {
-                if (appState.localActiveUser && appState.localActiveUser.user_id) {
-                    const { documents } = await appState.databases
-                        .listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.select(['user_id']), Query.limit(1)]);
-                    if (documents.length > 0 && documents[0].user_id !== appState.localActiveUser.user_id) {
-                        await fetchAndRenderActiveUser();
-                    }
-                }
-            }, SYNC_CHECK_INTERVAL_MS);
         }
     </script>
 </body>
