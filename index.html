@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos vProduccion</title>
+    <title>Sistema de Turnos vFinal</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
@@ -219,9 +219,9 @@
     <script type="module">
         import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
-        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
+        const APPWRITE_PROJECT_ID = '6695e86d001c5b5d56d1';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
-        const DATABASE_ID = 'turnos_db'; 
+        const DATABASE_ID = 'turnos_db';
         const FUNCTION_ID = '687889bb000f42ae8a5f';
         const COLLECTIONS = {
             QUEUE: '68786591001d1f8ebf65',
@@ -701,13 +701,10 @@
         function startSyncCheck() {
             clearInterval(appState.timers.syncCheck);
             appState.timers.syncCheck = setInterval(async () => {
-                if (appState.localActiveUser && appState.localActiveUser.userId) {
+                if (appState.localActiveUser && appState.localActiveUser.user_id) {
                     const { data: currentActiveUser } = await appState.databases
-                        .from('active_user')
-                        .select('userId')
-                        .limit(1)
-                        .single();
-                    if (currentActiveUser && currentActiveUser.userId !== appState.localActiveUser.userId) {
+                        .listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.select(['user_id']), Query.limit(1)]);
+                    if (currentActiveUser.documents.length > 0 && currentActiveUser.documents[0].user_id !== appState.localActiveUser.user_id) {
                         await fetchAndRenderActiveUser();
                     }
                 }
