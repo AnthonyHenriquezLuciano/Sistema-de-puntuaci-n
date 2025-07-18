@@ -219,9 +219,9 @@
     <script type="module">
         import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
-        const APPWRITE_PROJECT_ID = '687889bb000f42ae8a5f';
+        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
-        const DATABASE_ID = 'turnos_db';
+        const DATABASE_ID = 'turnos_db'; 
         const FUNCTION_ID = '687889bb000f42ae8a5f';
         const COLLECTIONS = {
             QUEUE: '68786591001d1f8ebf65',
@@ -262,7 +262,7 @@
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT || APPWRITE_PROJECT_ID === 'TU_PROJECT_ID') {
+            if (!APPWRITE_PROJECT_ID || !APPWRITE_ENDPOINT) {
                 return showErrorScreen("Las credenciales de Appwrite no están configuradas.");
             }
             appState.client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
@@ -412,7 +412,7 @@
             
             try {
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
-                    userId: currentUser.$id, 
+                    user_id: currentUser.$id, 
                     email: currentUser.email, 
                     joined_at: new Date().toISOString()
                 });
@@ -435,10 +435,10 @@
         
         function handleActiveUserChange() {
             const activeUserData = appState.localActiveUser;
-            const wasMyTurn = appState.previousActiveUser?.userId === appState.currentUser?.$id;
-            const isMyTurn = activeUserData?.userId === appState.currentUser?.$id;
+            const wasMyTurn = appState.previousActiveUser?.user_id === appState.currentUser?.$id;
+            const isMyTurn = activeUserData?.user_id === appState.currentUser?.$id;
 
-            if (isMyTurn && !wasMyTurn && !activeUserData.isPaused) {
+            if (isMyTurn && !wasMyTurn && !activeUserData.is_paused) {
                 showTurnNotification();
             }
             appState.previousActiveUser = { ...activeUserData };
@@ -452,10 +452,10 @@
             updateSummaryPanel();
             updateJoinButtonState();
 
-            if (activeUserData && activeUserData.userId) {
-                if (activeUserData.isPaused) {
-                     updateTimerDisplayUI(activeUserData.remainingTime);
-                     if(activeUserData.userId === appState.currentUser?.$id) {
+            if (activeUserData && activeUserData.user_id) {
+                if (activeUserData.is_paused) {
+                     updateTimerDisplayUI(activeUserData.remaining_time);
+                     if(activeUserData.user_id === appState.currentUser?.$id) {
                         appState.timers.autoResumeTimer = setTimeout(() => toggleTimerPause(false), MAX_PAUSE_DURATION_SECONDS * 1000);
                      }
                 } else {
@@ -469,8 +469,8 @@
         
         function startOptimizedTimer(activeUserData) {
             let lastUpdate = 0;
-            const startTime = new Date(activeUserData.lastUpdated).getTime();
-            const initialRemaining = activeUserData.remainingTime;
+            const startTime = new Date(activeUserData.last_updated).getTime();
+            const initialRemaining = activeUserData.remaining_time;
 
             function timerLoop(timestamp) {
                 if (appState.timers.activeUserAnimationFrame === null) return;
@@ -482,7 +482,7 @@
                     updateSummaryPanel();
                     lastUpdate = timestamp;
                     if (remaining <= 0) {
-                        if (activeUserData.userId === appState.currentUser?.$id) {
+                        if (activeUserData.user_id === appState.currentUser?.$id) {
                             showNotification('Tu turno ha terminado', 'warning');
                             leaveTurn();
                         }
@@ -496,20 +496,20 @@
 
         async function toggleTimerPause(shouldPause) {
             const currentTurn = appState.localActiveUser;
-            if(!currentTurn || currentTurn.userId !== appState.currentUser.id || currentTurn.isPaused === shouldPause) return;
+            if(!currentTurn || currentTurn.user_id !== appState.currentUser.id || currentTurn.is_paused === shouldPause) return;
             
-            let updates = { isPaused: shouldPause };
+            let updates = { is_paused: shouldPause };
             if(shouldPause) {
-                if(currentTurn.pausesUsed >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
-                const elapsed = Math.floor((Date.now() - new Date(currentTurn.lastUpdated).getTime()) / 1000);
-                updates.remainingTime = Math.max(0, currentTurn.remainingTime - elapsed);
-                updates.pausesUsed = currentTurn.pausesUsed + 1;
+                if(currentTurn.pauses_used >= MAX_PAUSES_PER_TURN) return showNotification("Límite de pausas alcanzado.", 'error');
+                const elapsed = Math.floor((Date.now() - new Date(currentTurn.last_updated).getTime()) / 1000);
+                updates.remaining_time = Math.max(0, currentTurn.remaining_time - elapsed);
+                updates.pauses_used = currentTurn.pauses_used + 1;
                 updates.pause_start_time = new Date().toISOString();
             } else {
                 clearTimeout(appState.timers.autoResumeTimer);
                 updates.pause_start_time = null;
             }
-            updates.lastUpdated = new Date().toISOString();
+            updates.last_updated = new Date().toISOString();
             
             await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, currentTurn.$id, updates);
         }
@@ -519,7 +519,7 @@
             if (!activeUser) return;
             setButtonLoading(document.getElementById('leaveTurnBtn'), true);
             await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUser.$id, {
-                userId: null, email: null, remainingTime: null, isPaused: false, lastUpdated: null, pausesUsed: 0
+                user_id: null, email: null, remaining_time: null, is_paused: false, last_updated: null, pauses_used: 0
             });
             await promoteNextUser();
         }
@@ -541,21 +541,21 @@
         }
 
         function createQueueRow(queueItem, index) {
-            if (!queueItem || !queueItem.userId) return null;
+            if (!queueItem || !queueItem.user_id) return null;
             const tr = document.createElement('tr');
-            tr.dataset.key = queueItem.userId;
-            const isCurrentUser = appState.currentUser?.$id === queueItem.userId;
+            tr.dataset.key = queueItem.user_id;
+            const isCurrentUser = appState.currentUser?.$id === queueItem.user_id;
             if (isCurrentUser) tr.className = 'current-user';
-            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.userId}">Salir</button>` : 'En espera';
-            const joinedTime = new Date(queueItem.joinedAt).toLocaleTimeString('es-DO');
+            const actionCell = isCurrentUser ? `<button class="leave-queue-btn" data-key="${queueItem.user_id}">Salir</button>` : 'En espera';
+            const joinedTime = new Date(queueItem.joined_at).toLocaleTimeString('es-DO');
             tr.innerHTML = `<td>${index + 1}</td><td>${queueItem.email || ''}</td><td>${joinedTime}</td><td>${actionCell}</td>`;
             return tr;
         }
 
         function updateJoinButtonState() {
             if(!appState.currentUser) return;
-            const isUserInQueue = appState.localQueue.some(user => user.userId === appState.currentUser.id);
-            const isUserActive = appState.localActiveUser?.userId === appState.currentUser.id;
+            const isUserInQueue = appState.localQueue.some(user => user.user_id === appState.currentUser.id);
+            const isUserActive = appState.localActiveUser?.user_id === appState.currentUser.id;
             UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
         
@@ -565,10 +565,10 @@
             UIElements.pauseInfo.innerHTML = '';
             updateJoinButtonState();
 
-            if (data?.userId === appState.currentUser?.id) {
-                const pausesUsed = data.pausesUsed || 0;
+            if (data?.user_id === appState.currentUser?.id) {
+                const pausesUsed = data.pauses_used || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
-                const isPaused = data.isPaused || false;
+                const isPaused = data.is_paused || false;
                 UIElements.timerControls.innerHTML = `
                     <button id="pauseTimerBtn" class="timer-btn" data-original-text="Pausar" ${isPaused || pausesLeft <= 0 ? 'disabled' : ''}><svg ...></svg>Pausar</button>
                     <button id="resumeTimerBtn" class="timer-btn" data-original-text="Reanudar" ${!isPaused ? 'disabled' : ''}><svg ...></svg>Reanudar</button>
@@ -576,25 +576,25 @@
                 if(isPaused) UIElements.pauseInfo.textContent = `Turno en pausa. Reanudación automática en ${MAX_PAUSE_DURATION_SECONDS}s.`;
                 else UIElements.pauseInfo.textContent = `Pausas restantes: ${pausesLeft}`;
             } else {
-                UIElements.timerControls.innerHTML = data?.isPaused ? '<i>Turno en pausa</i>' : '';
+                UIElements.timerControls.innerHTML = data?.is_paused ? '<i>Turno en pausa</i>' : '';
             }
         }
         
         function updateSummaryPanel() {
              if (!appState.currentUser) { UIElements.summaryPanel.style.display = 'none'; return; }
-            const myQueueIndex = appState.localQueue.findIndex(u => u.userId === appState.currentUser.id);
+            const myQueueIndex = appState.localQueue.findIndex(u => u.user_id === appState.currentUser.id);
             if (myQueueIndex === -1) { UIElements.summaryPanel.style.display = 'none'; return; }
             UIElements.summaryPanel.style.display = 'block';
             const usersAhead = myQueueIndex;
             let estimatedWaitSeconds = usersAhead * TURN_TIME_SECONDS;
             const activeUser = appState.localActiveUser;
-            if (activeUser && activeUser.userId) {
+            if (activeUser && activeUser.user_id) {
                 let remainingTime = 0;
-                if (activeUser.isPaused) {
-                    remainingTime = activeUser.remainingTime;
-                } else if (activeUser.lastUpdated) {
-                    const elapsed = Math.floor((Date.now() - new Date(activeUser.lastUpdated).getTime()) / 1000);
-                    remainingTime = Math.max(0, activeUser.remainingTime - elapsed);
+                if (activeUser.is_paused) {
+                    remainingTime = activeUser.remaining_time;
+                } else if (activeUser.last_updated) {
+                    const elapsed = Math.floor((Date.now() - new Date(activeUser.last_updated).getTime()) / 1000);
+                    remainingTime = Math.max(0, activeUser.remaining_time - elapsed);
                 }
                 estimatedWaitSeconds += remainingTime;
             }
@@ -627,7 +627,7 @@
             appState.timers.heartbeat = setInterval(async () => {
                 if (appState.currentUser) {
                     try {
-                        await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { lastHeartbeat: new Date().toISOString() });
+                        await appState.databases.updateDocument(DATABASE_ID, COLLECTIONS.SESSIONS, user.$id, { last_heartbeat: new Date().toISOString() });
                     } catch (error) {
                         console.error('Heartbeat error:', error);
                     }
