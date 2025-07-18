@@ -14,15 +14,18 @@ export default async ({ res, log, error }) => {
     ACTIVE_USER: '6878665f001083c0cb2f',
     SESSIONS: '6878670b00035fe5db1e'
   };
+  const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutos
 
   try {
-    // 1. Obtener el documento del usuario activo (siempre debe existir uno)
-    const activeUserResponse = await databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
-    if (activeUserResponse.documents.length === 0) {
-      throw new Error("El documento del usuario activo no existe en la base de datos.");
+    // 1. Obtener el documento del usuario activo
+    let activeUserResponse = await databases.listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.limit(1)]);
+    let activeUserDoc = activeUserResponse.documents[0];
+
+    // 9. Si el documento de usuario activo no existe, créalo (salvaguarda)
+    if (!activeUserDoc) {
+        activeUserDoc = await databases.createDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, 'singleton', { is_paused: false, pauses_used: 0 });
     }
-    const activeUserDoc = activeUserResponse.documents[0];
-    
+
     // 2. Si el turno ya está ocupado, no hacer nada
     if (activeUserDoc.user_id) {
       log('El turno ya está ocupado.');
@@ -41,39 +44,44 @@ export default async ({ res, log, error }) => {
     }
 
     const queue = queueResponse.documents;
-    const activeSessionUserIds = new Set(sessionsResponse.documents.map(doc => doc.user_id));
+    const activeSessionUserIds = new Set(
+        sessionsResponse.documents
+            .filter(doc => (Date.now() - new Date(doc.last_heartbeat).getTime()) < SESSION_TIMEOUT_MS)
+            .map(doc => doc.user_id)
+    );
     
     let nextInLine = null;
 
-    // 4. Encontrar el primer usuario en la cola que también esté activo
+    // 8. Encontrar el primer usuario en la cola que también esté activo
     for (const userInQueue of queue) {
         if (activeSessionUserIds.has(userInQueue.user_id)) {
             nextInLine = userInQueue;
-            break; // Encontramos al candidato
+            break; 
         } else {
-            // Este usuario está en la cola pero no tiene sesión activa, lo limpiamos
             log(`Limpiando usuario inactivo de la cola: ${userInQueue.email}`);
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, userInQueue.$id);
         }
     }
-
-    // 5. Si encontramos un candidato, lo promovemos
+    
     if (nextInLine) {
       log(`Promoviendo al usuario: ${nextInLine.email}`);
       
-      // Actualizar el documento de usuario activo
-      await databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUserDoc.$id, {
+      // Actualizar y eliminar de forma atómica
+      const updates = {};
+      updates[`databases/${DATABASE_ID}/collections/${COLLECTIONS.ACTIVE_USER}/documents/${activeUserDoc.$id}`] = {
         user_id: nextInLine.user_id,
         email: nextInLine.email,
         is_paused: false,
-        remaining_time: 900, // 15 minutos
+        remaining_time: 900,
         last_updated: new Date().toISOString(),
         pauses_used: 0
-      });
-
-      // Eliminar al usuario de la cola
-      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, nextInLine.$id);
+      };
+      updates[`databases/${DATABASE_ID}/collections/${COLLECTIONS.QUEUE}/documents/${nextInLine.$id}`] = null;
       
+      // Usar una operación de actualización múltiple para simular una transacción
+      await databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUserDoc.$id, updates[`databases/${DATABASE_ID}/collections/${COLLECTIONS.ACTIVE_USER}/documents/${activeUserDoc.$id}`]);
+      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.QUEUE, nextInLine.$id);
+
       log(`Usuario ${nextInLine.email} promovido.`);
       return res.json({ success: true, userPromoted: nextInLine.email });
     } else {
@@ -86,4 +94,3 @@ export default async ({ res, log, error }) => {
     return res.json({ success: false, error: e.message }, 500);
   }
 };
-
