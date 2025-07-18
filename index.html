@@ -219,7 +219,7 @@
     <script type="module">
         import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
-        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
+        const APPWRITE_PROJECT_ID = '687889bb000f42ae8a5f';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
         const DATABASE_ID = 'turnos_db';
         const FUNCTION_ID = '687889bb000f42ae8a5f';
@@ -394,7 +394,7 @@
         }
 
         async function fetchAndRenderQueue() {
-            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joinedAt')]);
+            const response = await appState.databases.listDocuments(DATABASE_ID, COLLECTIONS.QUEUE, [Query.orderAsc('joined_at')]);
             appState.localQueue = response.documents;
             renderQueue();
         }
@@ -414,7 +414,7 @@
                 await appState.databases.createDocument(DATABASE_ID, COLLECTIONS.QUEUE, currentUser.$id, { 
                     userId: currentUser.$id, 
                     email: currentUser.email, 
-                    joinedAt: new Date().toISOString()
+                    joined_at: new Date().toISOString()
                 });
                 showNotification('Te uniste a la cola.', 'success');
                 await promoteNextUser();
