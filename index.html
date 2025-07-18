@@ -217,10 +217,9 @@
     <div class="notification" id="notification"></div>
     
     <script type="module">
-        import { NhostClient } from 'https://cdn.jsdelivr.net/npm/@nhost/nhost-js/+esm';
+        import { NhostClient } from 'https://unpkg.com/@nhost/nhost-js@latest/dist/nhost-js.mjs';
 
-        // --- CONSTANTES Y CONFIGURACIÓN ---
-        const NHOST_BACKEND_URL = 'https://lqjxohmryncaxbjdqbza.nhost.run'; // ◀️ PEGA AQUÍ TU BACKEND URL
+        const NHOST_BACKEND_URL = 'https://lqjxohmryncaxbjdqbza.nhost.run';
 
         const TURN_TIME_SECONDS = 15 * 60;
         const MAX_PAUSE_DURATION_SECONDS = 30;
@@ -251,12 +250,10 @@
             loginButtonText: document.getElementById('loginButtonText'),
         };
 
-        // --- INICIALIZACIÓN ---
-        
         document.addEventListener('DOMContentLoaded', startApp);
         
         async function startApp() {
-            if (!NHOST_BACKEND_URL || NHOST_BACKEND_URL === 'URL_DE_TU_BACKEND') {
+            if (!NHOST_BACKEND_URL) {
                 return showErrorScreen("La URL del backend de Nhost no está configurada.");
             }
             appState.nhost = new NhostClient({ backendUrl: NHOST_BACKEND_URL });
@@ -307,6 +304,7 @@
                 const { error } = await appState.nhost.auth.signIn({ email, password });
                 if (error) throw error;
             } catch (error) {
+                console.error("Error detallado de inicio de sesión:", error);
                 showError('Correo o contraseña incorrectos.');
             } finally {
                 setButtonLoading(UIElements.loginButton, false, 'Iniciar Sesión');
@@ -428,7 +426,6 @@
         }
         
         async function promoteNextUser() {
-            // La lógica ahora está en el cliente, replicando el flujo de Firebase
             try {
                 if (appState.localActiveUser && appState.localActiveUser.user_id) return;
                 if (appState.localQueue.length === 0) return;
@@ -436,19 +433,14 @@
                 const nextInLine = appState.localQueue[0];
                 
                 const PROMOTE_MUTATION = `
-                    mutation PromoteUser($userId: uuid!, $email: String!, $updates: active_user_set_input!) {
+                    mutation PromoteUser($updates: active_user_set_input!) {
                         update_active_user(where: {id: {_eq: 1}, _and: {user_id: {_is_null: true}}}, _set: $updates) {
                             affected_rows
-                        }
-                        delete_queue_by_pk(user_id: $userId) {
-                            user_id
                         }
                     }
                 `;
 
                 const { data } = await appState.nhost.graphql.request(PROMOTE_MUTATION, {
-                    userId: nextInLine.user_id,
-                    email: nextInLine.email,
                     updates: {
                         user_id: nextInLine.user_id,
                         email: nextInLine.email,
@@ -458,6 +450,10 @@
                         pauses_used: 0
                     }
                 });
+
+                if (data?.update_active_user?.affected_rows > 0) {
+                    await leaveQueue(nextInLine.user_id);
+                }
                 
             } catch (error) {
                 console.error("Error en promoteNextUser:", error);
