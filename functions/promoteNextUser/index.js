@@ -23,7 +23,7 @@ export default async ({ res, log, error }) => {
     const activeUserDoc = activeUserResponse.documents[0];
     
     // 2. Si el turno ya está ocupado, no hacer nada
-    if (activeUserDoc.userId) {
+    if (activeUserDoc.user_id) {
       log('El turno ya está ocupado.');
       return res.json({ success: false, message: 'Turno ocupado.' });
     }
@@ -38,12 +38,12 @@ export default async ({ res, log, error }) => {
 
     // 4. Actualizar el documento de usuario activo con los datos del siguiente en la cola
     await databases.updateDocument(DATABASE_ID, COLLECTIONS.ACTIVE_USER, activeUserDoc.$id, {
-      userId: nextInLine.user_id,
+      user_id: nextInLine.user_id,
       email: nextInLine.email,
-      isPaused: false,
-      remainingTime: 900, // 15 minutos
-      lastUpdated: new Date().toISOString(),
-      pausesUsed: 0
+      is_paused: false,
+      remaining_time: 900, // 15 minutos
+      last_updated: new Date().toISOString(),
+      pauses_used: 0
     });
 
     // 5. Eliminar al usuario de la cola
