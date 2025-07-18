@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos vFinal</title>
+    <title>Sistema de Turnos vProduccion</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         :root { 
@@ -219,7 +219,7 @@
     <script type="module">
         import { Client, Account, Databases, ID, Query, Functions, AppwriteException } from "https://cdn.skypack.dev/appwrite";
 
-        const APPWRITE_PROJECT_ID = '68785ed6000dc71c5b5d';
+        const APPWRITE_PROJECT_ID = '6695e86d001c5b5d56d1';
         const APPWRITE_ENDPOINT = 'https://nyc.cloud.appwrite.io/v1';
         const DATABASE_ID = 'turnos_db';
         const FUNCTION_ID = '687889bb000f42ae8a5f';
@@ -427,7 +427,8 @@
         
         async function promoteNextUser() {
             try {
-                await appState.functions.createExecution(FUNCTION_ID);
+                const result = await appState.functions.createExecution(FUNCTION_ID);
+                console.log('Función de promoción ejecutada:', result);
             } catch(e) {
                 console.error("Error al ejecutar la función de promoción:", e);
             }
@@ -496,7 +497,7 @@
 
         async function toggleTimerPause(shouldPause) {
             const currentTurn = appState.localActiveUser;
-            if(!currentTurn || currentTurn.user_id !== appState.currentUser.id || currentTurn.is_paused === shouldPause) return;
+            if(!currentTurn || currentTurn.user_id !== appState.currentUser.$id || currentTurn.is_paused === shouldPause) return;
             
             let updates = { is_paused: shouldPause };
             if(shouldPause) {
@@ -554,8 +555,8 @@
 
         function updateJoinButtonState() {
             if(!appState.currentUser) return;
-            const isUserInQueue = appState.localQueue.some(user => user.user_id === appState.currentUser.id);
-            const isUserActive = appState.localActiveUser?.user_id === appState.currentUser.id;
+            const isUserInQueue = appState.localQueue.some(user => user.user_id === appState.currentUser.$id);
+            const isUserActive = appState.localActiveUser?.user_id === appState.currentUser.$id;
             UIElements.joinQueueBtn.disabled = isUserInQueue || isUserActive;
         }
         
@@ -565,7 +566,7 @@
             UIElements.pauseInfo.innerHTML = '';
             updateJoinButtonState();
 
-            if (data?.user_id === appState.currentUser?.id) {
+            if (data?.user_id === appState.currentUser?.$id) {
                 const pausesUsed = data.pauses_used || 0;
                 const pausesLeft = MAX_PAUSES_PER_TURN - pausesUsed;
                 const isPaused = data.is_paused || false;
@@ -582,7 +583,7 @@
         
         function updateSummaryPanel() {
              if (!appState.currentUser) { UIElements.summaryPanel.style.display = 'none'; return; }
-            const myQueueIndex = appState.localQueue.findIndex(u => u.user_id === appState.currentUser.id);
+            const myQueueIndex = appState.localQueue.findIndex(u => u.user_id === appState.currentUser.$id);
             if (myQueueIndex === -1) { UIElements.summaryPanel.style.display = 'none'; return; }
             UIElements.summaryPanel.style.display = 'block';
             const usersAhead = myQueueIndex;
@@ -702,9 +703,9 @@
             clearInterval(appState.timers.syncCheck);
             appState.timers.syncCheck = setInterval(async () => {
                 if (appState.localActiveUser && appState.localActiveUser.user_id) {
-                    const { data: currentActiveUser } = await appState.databases
+                    const { documents } = await appState.databases
                         .listDocuments(DATABASE_ID, COLLECTIONS.ACTIVE_USER, [Query.select(['user_id']), Query.limit(1)]);
-                    if (currentActiveUser.documents.length > 0 && currentActiveUser.documents[0].user_id !== appState.localActiveUser.user_id) {
+                    if (documents.length > 0 && documents[0].user_id !== appState.localActiveUser.user_id) {
                         await fetchAndRenderActiveUser();
                     }
                 }
