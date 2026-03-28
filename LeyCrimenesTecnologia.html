@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ley 53-07 — Crímenes y Delitos de Alta Tecnología en RD</title>
+  <style>
+    /* ── Variables ─────────────────────────────────────────── */
+    :root {
+      --blue-dark:   #0f172a;
+      --blue-mid:    #1e3a5f;
+      --blue:        #2563eb;
+      --blue-light:  #3b82f6;
+      --cyan:        #06b6d4;
+      --green:       #10b981;
+      --amber:       #f59e0b;
+      --red:         #ef4444;
+      --purple:      #8b5cf6;
+      --white:       #ffffff;
+      --gray-50:     #f8fafc;
+      --gray-100:    #f1f5f9;
+      --gray-200:    #e2e8f0;
+      --gray-600:    #475569;
+      --gray-800:    #1e293b;
+      --radius:      12px;
+      --shadow:      0 4px 24px rgba(0,0,0,.12);
+      --shadow-lg:   0 8px 40px rgba(0,0,0,.18);
+    }
+
+    /* ── Reset & Base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      line-height: 1.65;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Navbar ────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,23,42,.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding: 0 1.5rem;
+    }
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      gap: 1rem;
+    }
+    .nav-logo {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--cyan);
+      white-space: nowrap;
+    }
+    .nav-links {
+      display: flex;
+      gap: .25rem;
+      flex-wrap: wrap;
+      list-style: none;
+    }
+    .nav-links a {
+      color: rgba(255,255,255,.75);
+      font-size: .78rem;
+      padding: .35rem .65rem;
+      border-radius: 6px;
+      transition: background .2s, color .2s;
+    }
+    .nav-links a:hover { background: rgba(255,255,255,.1); color: var(--white); }
+
+    /* ── Sections shared ───────────────────────────────────── */
+    section {
+      padding: 80px 1.5rem;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: .5rem;
+    }
+    .section-title {
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+    .section-sub {
+      font-size: 1.05rem;
+      color: var(--gray-600);
+      max-width: 680px;
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── PORTADA ───────────────────────────────────────────── */
+    #portada {
+      background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue-mid) 60%, #0c2a4a 100%);
+      color: var(--white);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 60px 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    #portada::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(37,99,235,.3) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 10% 80%, rgba(6,182,212,.2) 0%, transparent 55%);
+      pointer-events: none;
+    }
+    .portada-badge {
+      display: inline-block;
+      background: rgba(6,182,212,.15);
+      border: 1px solid rgba(6,182,212,.4);
+      color: var(--cyan);
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: .4rem 1rem;
+      border-radius: 999px;
+      margin-bottom: 1.5rem;
+    }
+    .portada-title {
+      font-size: clamp(2rem, 5vw, 3.6rem);
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+    }
+    .portada-title span { color: var(--cyan); }
+    .portada-desc {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: rgba(255,255,255,.75);
+      max-width: 600px;
+      margin-bottom: 2.5rem;
+    }
+    .portada-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .portada-chip {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 999px;
+      padding: .45rem 1rem;
+      font-size: .85rem;
+      color: rgba(255,255,255,.8);
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .portada-scroll {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .4rem;
+      color: rgba(255,255,255,.4);
+      font-size: .75rem;
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(6px); }
+    }
+
+    /* ── INTRODUCCIÓN ──────────────────────────────────────── */
+    #introduccion { background: var(--white); }
+    .intro-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem;
+      align-items: start;
+    }
+    @media (max-width: 720px) { .intro-grid { grid-template-columns: 1fr; } }
+    .intro-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 500px) { .intro-cards { grid-template-columns: 1fr; } }
+    .intro-card {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: box-shadow .2s, transform .2s;
+    }
+    .intro-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+    .intro-card .icon { font-size: 1.8rem; margin-bottom: .6rem; }
+    .intro-card h4 { font-size: .9rem; font-weight: 700; margin-bottom: .3rem; }
+    .intro-card p { font-size: .83rem; color: var(--gray-600); }
+    .alert-box {
+      background: linear-gradient(135deg, #fff7ed, #fef3c7);
+      border: 1px solid #fcd34d;
+      border-left: 4px solid var(--amber);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .alert-box p { font-size: .95rem; color: #92400e; font-weight: 500; }
+
+    /* ── FUNDAMENTOS ───────────────────────────────────────── */
+    #fundamentos {
+      background: linear-gradient(180deg, var(--gray-100) 0%, var(--white) 100%);
+    }
+    .fund-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .fund-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      border: 1px solid var(--gray-200);
+      padding: 1.75rem;
+      box-shadow: var(--shadow);
+    }
+    .fund-card .card-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 1rem;
+    }
+    .fund-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: .6rem; }
+    .fund-card p { font-size: .88rem; color: var(--gray-600); }
+    .fund-card ul { font-size: .88rem; color: var(--gray-600); padding-left: 1.2rem; }
+    .fund-card li { margin-bottom: .3rem; }
+    .bg-blue { background: rgba(37,99,235,.1); }
+    .bg-cyan { background: rgba(6,182,212,.1); }
+    .bg-green { background: rgba(16,185,129,.1); }
+    .bg-purple { background: rgba(139,92,246,.1); }
+    .bg-amber { background: rgba(245,158,11,.1); }
+    .bg-red { background: rgba(239,68,68,.1); }
+    .blockquote {
+      border-left: 4px solid var(--blue);
+      background: rgba(37,99,235,.05);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 1.25rem 1.5rem;
+      font-style: italic;
+      font-size: .95rem;
+      color: var(--gray-600);
+      margin: 2rem 0;
+    }
+    .blockquote strong { color: var(--blue-mid); font-style: normal; }
+    .protect-table {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    @media (max-width: 600px) { .protect-table { grid-template-columns: 1fr; } }
+    .protect-col {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-top: 3px solid var(--blue);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+    .protect-col h4 { font-size: .9rem; font-weight: 700; color: var(--blue); margin-bottom: .75rem; }
+    .protect-col ul { list-style: none; }
+    .protect-col li { font-size: .85rem; color: var(--gray-600); padding: .2rem 0; }
+    .protect-col li::before { content: '• '; color: var(--blue); font-weight: 700; }
+
+    /* ── DELITOS ───────────────────────────────────────────── */
+    #delitos { background: var(--blue-dark); color: var(--white); }
+    #delitos .section-label { color: var(--cyan); }
+    #delitos .section-title { color: var(--white); }
+    #delitos .section-sub { color: rgba(255,255,255,.65); }
+    .delito-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-bottom: 2rem;
+    }
+    .delito-tab {
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      padding: .45rem 1rem;
+      font-size: .82rem;
+      font-weight: 600;
+      color: rgba(255,255,255,.7);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .delito-tab.active,
+    .delito-tab:hover {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: var(--white);
+    }
+    .delito-panel { display: none; }
+    .delito-panel.active { display: block; animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .delito-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+    @media (max-width: 700px) { .delito-content { grid-template-columns: 1fr; } }
+    .delito-info h3 { font-size: 1.4rem; font-weight: 800; margin-bottom: .75rem; }
+    .delito-info p { font-size: .92rem; color: rgba(255,255,255,.75); margin-bottom: 1rem; }
+    .delito-info ol, .delito-info ul { font-size: .88rem; color: rgba(255,255,255,.7); padding-left: 1.4rem; }
+    .delito-info li { margin-bottom: .35rem; }
+    .law-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      background: rgba(239,68,68,.15);
+      border: 1px solid rgba(239,68,68,.3);
+      color: #fca5a5;
+      font-size: .8rem;
+      font-weight: 600;
+      padding: .4rem .9rem;
+      border-radius: 999px;
+      margin-top: .75rem;
+    }
+    .code-block {
+      background: rgba(0,0,0,.4);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: .82rem;
+      line-height: 1.7;
+      color: #a5f3fc;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .delito-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: .85rem;
+      margin-top: 2.5rem;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+    .delito-table thead tr { background: var(--blue); color: var(--white); }
+    .delito-table th { padding: .9rem 1.1rem; text-align: left; font-weight: 700; }
+    .delito-table tbody tr:nth-child(odd) { background: rgba(255,255,255,.04); }
+    .delito-table tbody tr:nth-child(even) { background: rgba(255,255,255,.08); }
+    .delito-table td { padding: .8rem 1.1rem; color: rgba(255,255,255,.8); vertical-align: middle; }
+    .delito-table td:last-child { color: #fca5a5; font-weight: 600; }
+    .delito-table td:nth-child(2) { color: var(--cyan); }
+
+    /* ── IMPACTO & PREVENCIÓN ──────────────────────────────── */
+    #impacto { background: var(--white); }
+    .impact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .impact-card {
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      border: 1px solid var(--gray-200);
+    }
+    .impact-card .icon { font-size: 2rem; margin-bottom: .75rem; }
+    .impact-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: .5rem; }
+    .impact-card ul { font-size: .87rem; color: var(--gray-600); padding-left: 1.2rem; }
+    .impact-card li { margin-bottom: .3rem; }
+    .cia-triad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    @media (max-width: 600px) { .cia-triad { grid-template-columns: 1fr; } }
+    .cia-item {
+      text-align: center;
+      border-radius: var(--radius);
+      padding: 1.5rem 1rem;
+      color: var(--white);
+    }
+    .cia-item .cia-icon { font-size: 2.2rem; margin-bottom: .5rem; }
+    .cia-item h4 { font-size: 1rem; font-weight: 800; margin-bottom: .4rem; }
+    .cia-item p { font-size: .82rem; opacity: .85; }
+    .cia-blue { background: var(--blue); }
+    .cia-green { background: var(--green); }
+    .cia-cyan { background: #0284c7; }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .tool-item {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: flex-start;
+      gap: .75rem;
+    }
+    .tool-item .t-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: .1rem; }
+    .tool-item h4 { font-size: .88rem; font-weight: 700; }
+    .tool-item p { font-size: .8rem; color: var(--gray-600); }
+
+    .practices-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+    @media (max-width: 640px) { .practices-cols { grid-template-columns: 1fr; } }
+    .practice-box {
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      border: 1px solid var(--gray-200);
+    }
+    .practice-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+    .practice-box ul { list-style: none; }
+    .practice-box li {
+      display: flex;
+      align-items: flex-start;
+      gap: .5rem;
+      font-size: .88rem;
+      color: var(--gray-600);
+      margin-bottom: .5rem;
+    }
+    .practice-box li::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .law-roles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .law-role {
+      background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+      border: 1px solid #bfdbfe;
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .law-role .r-icon { font-size: 1.8rem; margin-bottom: .5rem; }
+    .law-role p { font-size: .85rem; color: #1e40af; font-weight: 500; }
+
+    /* ── CONCLUSIÓN ────────────────────────────────────────── */
+    #conclusion {
+      background: linear-gradient(135deg, var(--blue-dark), var(--blue-mid));
+      color: var(--white);
+      text-align: center;
+    }
+    #conclusion .section-title { color: var(--white); }
+    .conclusion-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin: 2.5rem 0;
+    }
+    @media (max-width: 640px) { .conclusion-grid { grid-template-columns: 1fr; } }
+    .concl-card {
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .concl-card .c-icon { font-size: 2rem; margin-bottom: .75rem; }
+    .concl-card h4 { font-size: .95rem; font-weight: 700; margin-bottom: .5rem; }
+    .concl-card ul { font-size: .83rem; color: rgba(255,255,255,.7); list-style: none; }
+    .concl-card li { margin-bottom: .3rem; }
+    .concl-card li::before { content: '→ '; opacity: .6; }
+    .final-message {
+      background: rgba(6,182,212,.1);
+      border: 1px solid rgba(6,182,212,.3);
+      border-radius: var(--radius);
+      padding: 2rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .final-message .fm-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+    .final-message h3 { font-size: 1.2rem; font-weight: 800; margin-bottom: .75rem; color: var(--cyan); }
+    .final-message p { font-size: .95rem; color: rgba(255,255,255,.8); }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    footer {
+      background: var(--blue-dark);
+      color: rgba(255,255,255,.45);
+      text-align: center;
+      padding: 1.5rem;
+      font-size: .8rem;
+      border-top: 1px solid rgba(255,255,255,.07);
+    }
+
+    /* ── Divider ───────────────────────────────────────────── */
+    .divider {
+      height: 4px;
+      border-radius: 2px;
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── Util ──────────────────────────────────────────────── */
+    .text-blue { color: var(--blue); }
+    .text-cyan { color: var(--cyan); }
+    .text-green { color: var(--green); }
+    .text-amber { color: var(--amber); }
+    .text-red { color: var(--red); }
+    .text-purple { color: var(--purple); }
+    .fw-700 { font-weight: 700; }
+    .mt-1 { margin-top: 1rem; }
+    .mt-2 { margin-top: 2rem; }
+    .mb-05 { margin-bottom: .5rem; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════ NAV ══════════════════════════ -->
+<nav>
+  <div class="nav-inner">
+    <span class="nav-logo">⚖️ Ley 53-07</span>
+    <ul class="nav-links">
+      <li><a href="#portada">Inicio</a></li>
+      <li><a href="#introduccion">Introducción</a></li>
+      <li><a href="#fundamentos">Fundamentos</a></li>
+      <li><a href="#delitos">Delitos</a></li>
+      <li><a href="#impacto">Impacto</a></li>
+      <li><a href="#conclusion">Conclusión</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ══════════════════════════ PORTADA ══════════════════════ -->
+<section id="portada">
+  <div class="container">
+    <div class="portada-badge">🇩🇴 República Dominicana · 2007</div>
+    <h1 class="portada-title">
+      Ley de Crímenes y Delitos<br>
+      de <span>Alta Tecnología</span>
+    </h1>
+    <p class="portada-desc">
+      Presentación académica — Análisis de la Ley No. 53-07 desde un
+      enfoque tecnológico y de seguridad informática.
+    </p>
+    <div class="portada-meta">
+      <span class="portada-chip">🗓️ Promulgada: 23 de abril de 2007</span>
+      <span class="portada-chip">⚖️ Ámbito: Penal / Tecnológico</span>
+      <span class="portada-chip">🛡️ Seguridad Informática</span>
+    </div>
+  </div>
+  <div class="portada-scroll">▼ Desliza hacia abajo</div>
+</section>
+
+<!-- ══════════════════════════ INTRODUCCIÓN ═════════════════ -->
+<section id="introduccion">
+  <div class="container">
+    <p class="section-label text-blue">01 — Introducción</p>
+    <div class="divider" style="background:linear-gradient(90deg,var(--blue),transparent);"></div>
+    <div class="intro-grid">
+      <div>
+        <h2 class="section-title">La tecnología como eje central de la sociedad</h2>
+        <p class="section-sub">
+          La tecnología es hoy el pilar de la economía global, las comunicaciones personales
+          y empresariales, los servicios del Estado y la vida cotidiana de millones de personas.
+        </p>
+        <div class="alert-box">
+          <p>⚠️ <strong>Con mayor conectividad, también aumentan los riesgos digitales.</strong>
+            Un marco legal robusto es esencial para combatir estos delitos.</p>
+        </div>
+      </div>
+      <div>
+        <div class="intro-cards">
+          <div class="intro-card">
+            <div class="icon">🌐</div>
+            <h4>Economía global</h4>
+            <p>El comercio digital mueve billones de dólares anualmente.</p>
+          </div>
+          <div class="intro-card">
+            <div class="icon">💬</div>
+            <h4>Comunicaciones</h4>
+            <p>Personales y empresariales dependen de plataformas digitales.</p>
+          </div>
+          <div class="intro-card">
+            <div class="icon">🏛️</div>
+            <h4>Servicios del Estado</h4>
+            <p>Gobierno electrónico, salud, educación y trámites en línea.</p>
+          </div>
+          <div class="intro-card">
+            <div class="icon">📈</div>
+            <h4>Crimen cibernético</h4>
+            <p>Los delitos digitales crecen exponencialmente en RD y el mundo.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-2">
+      <h3 class="fw-700 mb-05" style="font-size:1.1rem;">El aumento de los delitos digitales</h3>
+      <p style="color:var(--gray-600);font-size:.93rem;max-width:780px;">
+        En los últimos años, los crímenes cibernéticos han crecido exponencialmente.
+        República Dominicana no es la excepción: fraudes, hackeos y robos de identidad afectan
+        a ciudadanos, empresas y el gobierno. La falta de cultura de seguridad agrava la situación.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FUNDAMENTOS ══════════════════ -->
+<section id="fundamentos">
+  <div class="container">
+    <p class="section-label text-blue">02 — Fundamentos</p>
+    <div class="divider" style="background:linear-gradient(90deg,var(--blue),transparent);"></div>
+    <h2 class="section-title">¿Qué es la Ley 53-07?</h2>
+    <p class="section-sub">
+      La primera ley de la República Dominicana que regula los crímenes y delitos
+      cometidos mediante el uso de tecnología de la información.
+    </p>
+
+    <div class="blockquote">
+      <em>"Tiene por objeto la <strong>protección integral</strong> de los sistemas que utilicen
+      tecnologías de información y comunicación y su contenido, así como la
+      <strong>prevención y sanción</strong> de los delitos cometidos contra éstos o mediante su uso."</em>
+    </div>
+
+    <div class="fund-grid">
+      <div class="fund-card">
+        <div class="card-icon bg-blue">📜</div>
+        <h3>Origen de la Ley</h3>
+        <p>
+          Entre 2000 y 2007, RD vivió una explosión del uso de internet, con crecimiento del
+          comercio electrónico y la banca en línea. Los primeros casos de fraude digital y hackeo
+          pusieron en evidencia la ausencia de legislación específica, lo que impulsó la creación
+          de la Ley 53-07 promulgada el <strong>23 de abril de 2007</strong>.
+        </p>
+      </div>
+      <div class="fund-card">
+        <div class="card-icon bg-green">🎯</div>
+        <h3>Objetivo</h3>
+        <ul>
+          <li>Sancionar el acceso no autorizado a sistemas informáticos</li>
+          <li>Proteger la confidencialidad de la información digital</li>
+          <li>Regular el uso indebido de datos personales</li>
+          <li>Garantizar la integridad de redes y sistemas</li>
+          <li>Disuadir a potenciales atacantes mediante sanciones claras</li>
+        </ul>
+      </div>
+      <div class="fund-card">
+        <div class="card-icon bg-purple">👥</div>
+        <h3>¿A quién protege?</h3>
+        <ul>
+          <li>Ciudadanos y personas naturales</li>
+          <li>Empresas e instituciones privadas</li>
+          <li>El Estado e infraestructura pública</li>
+          <li>Datos personales y credenciales</li>
+          <li>Sistemas informáticos y redes</li>
+        </ul>
+      </div>
+      <div class="fund-card">
+        <div class="card-icon bg-amber">👨‍💻</div>
+        <h3>Importancia para Ingenieros</h3>
+        <ul>
+          <li>Conocer la ley para no violarla inadvertidamente</li>
+          <li>Diseñar sistemas que cumplan normativas</li>
+          <li>Implementar controles de seguridad desde el diseño</li>
+          <li>Responder correctamente ante incidentes</li>
+          <li>Asesorar a empresas en cumplimiento legal</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="fw-700 mt-2 mb-05" style="font-size:1.1rem;">¿Qué protege la Ley?</h3>
+    <div class="protect-table">
+      <div class="protect-col">
+        <h4>📄 Información</h4>
+        <ul>
+          <li>Datos personales</li>
+          <li>Archivos digitales</li>
+          <li>Bases de datos</li>
+        </ul>
+      </div>
+      <div class="protect-col" style="border-top-color:var(--cyan);">
+        <h4 style="color:var(--cyan);">🌐 Redes</h4>
+        <ul>
+          <li>Internet</li>
+          <li>Intranets</li>
+          <li>Servidores</li>
+        </ul>
+      </div>
+      <div class="protect-col" style="border-top-color:var(--green);">
+        <h4 style="color:var(--green);">👤 Usuarios</h4>
+        <ul>
+          <li>Identidad digital</li>
+          <li>Credenciales</li>
+          <li>Privacidad</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="alert-box mt-2" style="background:linear-gradient(135deg,#eff6ff,#e0f2fe);border-left-color:var(--blue);">
+      <p style="color:#1e40af;">⚖️ <strong>La ignorancia de la ley no exime de responsabilidad.</strong>
+        Como ingenieros en sistemas, somos responsables de conocer y aplicar este marco legal.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ DELITOS ══════════════════════ -->
+<section id="delitos">
+  <div class="container">
+    <p class="section-label text-cyan">03 — Delitos Informáticos</p>
+    <div class="divider" style="background:linear-gradient(90deg,var(--cyan),transparent);"></div>
+    <h2 class="section-title">Delitos desde el enfoque técnico</h2>
+    <p class="section-sub">
+      Un delito informático es toda acción ilícita que usa un sistema informático como
+      herramienta o lo tiene como objetivo. Explora cada tipo a continuación.
+    </p>
+
+    <!-- Tabs -->
+    <div class="delito-tabs" role="tablist" aria-label="Tipos de delitos informáticos">
+      <button class="delito-tab active" onclick="showDelito('hackeo', this)" role="tab" aria-selected="true" aria-controls="panel-hackeo" id="tab-hackeo">💀 Hackeo</button>
+      <button class="delito-tab" onclick="showDelito('phishing', this)" role="tab" aria-selected="false" aria-controls="panel-phishing" id="tab-phishing">🎣 Phishing</button>
+      <button class="delito-tab" onclick="showDelito('malware', this)" role="tab" aria-selected="false" aria-controls="panel-malware" id="tab-malware">🦠 Malware</button>
+      <button class="delito-tab" onclick="showDelito('intercepcion', this)" role="tab" aria-selected="false" aria-controls="panel-intercepcion" id="tab-intercepcion">📡 Interceptación</button>
+      <button class="delito-tab" onclick="showDelito('identidad', this)" role="tab" aria-selected="false" aria-controls="panel-identidad" id="tab-identidad">🪪 Robo de Identidad</button>
+      <button class="delito-tab" onclick="showDelito('ddos', this)" role="tab" aria-selected="false" aria-controls="panel-ddos" id="tab-ddos">💥 DDoS</button>
+    </div>
+
+    <!-- Panel: Hackeo -->
+    <div id="panel-hackeo" class="delito-panel active" role="tabpanel" aria-labelledby="tab-hackeo">
+      <div class="delito-content">
+        <div class="delito-info">
+          <h3>💀 Acceso Ilícito — Hackeo</h3>
+          <p>Explotación de vulnerabilidades para obtener acceso no autorizado a sistemas informáticos.</p>
+          <p><strong>Técnicas comunes:</strong></p>
+          <ul>
+            <li>SQL Injection — inyección de código malicioso en bases de datos</li>
+            <li>Buffer Overflow — desbordamiento de memoria para ejecutar código</li>
+            <li>Exploits de 0-day — vulnerabilidades aún no parcheadas</li>
+            <li>Escaneo de puertos y detección de servicios vulnerables</li>
+          </ul>
+          <div class="law-badge">⚖️ Art. 5 — Prisión correccional + multa. Agravante si afecta infraestructura crítica del Estado.</div>
+        </div>
+        <div>
+          <div class="code-block">ATACANTE ──► Escaneo de puertos
+          │
+          ▼
+Detección de vulnerabilidad
+          │
+          ▼
+Explotación del fallo
+          │
+          ▼
+Acceso no autorizado
+   al sistema</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel: Phishing -->
+    <div id="panel-phishing" class="delito-panel" role="tabpanel" aria-labelledby="tab-phishing">
+      <div class="delito-content">
+        <div class="delito-info">
+          <h3>🎣 Phishing</h3>
+          <p>Ingeniería social aplicada al engaño digital. El atacante suplanta la identidad de una entidad confiable para robar credenciales.</p>
+          <p><strong>Flujo de un ataque de phishing:</strong></p>
+          <ol>
+            <li>📧 Envío de correo falso (banco, empresa, gobierno)</li>
+            <li>🔗 Enlace a sitio web clonado</li>
+            <li>🔑 Víctima ingresa sus credenciales</li>
+            <li>💾 Atacante captura usuario y contraseña</li>
+            <li>💸 Uso fraudulento de la cuenta</li>
+          </ol>
+          <p class="mt-1" style="color:rgba(255,255,255,.6);font-size:.85rem;">
+            Sin explotar código — explota la <strong style="color:var(--cyan);">confianza humana</strong>.
+          </p>
+          <div class="law-badge">⚖️ Art. 23 — Prisión 3–10 años por fraude mediante engaño digital.</div>
+        </div>
+        <div>
+          <div class="code-block">  Correo falso recibido
+  "Tu banco requiere verificación"
+          │
+          ▼
+  Clic en enlace malicioso
+          │
+          ▼
+  Sitio clonado idéntico
+  https://b4nco-falso.com
+          │
+          ▼
+  Credenciales robadas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel: Malware -->
+    <div id="panel-malware" class="delito-panel" role="tabpanel" aria-labelledby="tab-malware">
+      <div class="delito-content">
+        <div class="delito-info">
+          <h3>🦠 Malware</h3>
+          <p>Software malicioso diseñado para dañar, robar o controlar sistemas sin el consentimiento del usuario.</p>
+          <p><strong>Tipos principales:</strong></p>
+          <ul>
+            <li><strong>Virus</strong> — Se replica y daña archivos (ej: ILOVEYOU)</li>
+            <li><strong>Troyano</strong> — Se disfraza de software legítimo (ej: RAT)</li>
+            <li><strong>Ransomware</strong> — Cifra datos y pide rescate (ej: WannaCry)</li>
+            <li><strong>Spyware</strong> — Espía actividad del usuario (Keyloggers)</li>
+            <li><strong>Rootkit</strong> — Oculta presencia del atacante (Stuxnet)</li>
+          </ul>
+          <div class="law-badge">⚖️ Art. 10 — Distribución de malware penalizada con prisión y multa.</div>
+        </div>
+        <div>
+          <div class="code-block">DÍA 1:  Empleado abre adjunto
+        malicioso (phishing)
+   │
+DÍA 2:  Malware se instala
+        silenciosamente
+   │
+DÍA 5:  Atacante mapea
+        todos los sistemas
+   │
+DÍA 10: Ransomware cifra
+        TODOS los archivos
+   │
+   ▼
+"Pague $50,000 o pierde todo"</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel: Interceptación -->
+    <div id="panel-intercepcion" class="delito-panel" role="tabpanel" aria-labelledby="tab-intercepcion">
+      <div class="delito-content">
+        <div class="delito-info">
+          <h3>📡 Interceptación de Datos</h3>
+          <p>Captura de información en tránsito usando redes inseguras como vector de ataque.</p>
+          <p><strong>Técnicas:</strong></p>
+          <ul>
+            <li>Man-in-the-Middle (MitM) — interceptar tráfico entre cliente y servidor</li>
+            <li>Packet sniffing con Wireshark, Ettercap</li>
+            <li>Wi-Fi spoofing — puntos de acceso falsos</li>
+          </ul>
+          <p class="mt-1"><strong>Datos capturados:</strong></p>
+          <ul>
+            <li>Contraseñas en texto plano (HTTP)</li>
+            <li>Sesiones activas y cookies</li>
+            <li>Información bancaria</li>
+          </ul>
+          <p class="mt-1" style="color:var(--cyan);font-size:.85rem;">
+            Protección: HTTPS, VPN, cifrado TLS/SSL.
+          </p>
+          <div class="law-badge">⚖️ Art. 7 — Interceptación penalizada con prisión correccional.</div>
+        </div>
+        <div>
+          <div class="code-block">[Usuario] ──Wi-Fi público──►
+        │
+        ▼
+[ATACANTE: Man-in-the-Middle]
+        │
+  Captura en tránsito:
+  • Contraseñas
+  • Sesiones activas
+  • Info bancaria
+        │
+        ▼
+    [Servidor]</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel: Robo de identidad -->
+    <div id="panel-identidad" class="delito-panel" role="tabpanel" aria-labelledby="tab-identidad">
+      <div class="delito-content">
+        <div class="delito-info">
+          <h3>🪪 Robo de Identidad</h3>
+          <p>Obtención y uso fraudulento de información personal de otra persona.</p>
+          <p><strong>Información objetivo:</strong></p>
+          <ul>
+            <li>👤 Nombre, cédula, número de cuenta</li>
+            <li>🔐 Contraseñas y tokens de acceso</li>
+            <li>💳 Datos de tarjetas de crédito</li>
+          </ul>
+          <p class="mt-1"><strong>Métodos de obtención:</strong></p>
+          <ul>
+            <li>Phishing / Vishing / Smishing</li>
+            <li>Filtraciones de bases de datos (data breaches)</li>
+            <li>Compra de datos en la dark web</li>
+            <li>Skimming de tarjetas</li>
+          </ul>
+          <div class="law-badge">⚖️ Art. 23–24 — Prisión + multa proporcional al daño causado.</div>
+        </div>
+        <div>
+          <div class="code-block">Obtención de datos:
+  phishing + data breach
+          │
+          ▼
+Suplantación de identidad
+          │
+          ▼
+Acceso a cuentas bancarias
+Solicitud de créditos
+Trámites ilegales
+          │
+          ▼
+Fraude financiero +
+daño reputacional</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel: DDoS -->
+    <div id="panel-ddos" class="delito-panel" role="tabpanel" aria-labelledby="tab-ddos">
+      <div class="delito-content">
+        <div class="delito-info">
+          <h3>💥 Ataques DDoS</h3>
+          <p>Distributed Denial of Service — saturar un servidor con miles de peticiones simultáneas hasta hacerlo inaccesible.</p>
+          <p><strong>Características:</strong></p>
+          <ul>
+            <li>Red de bots (botnet) controlada remotamente</li>
+            <li>Objetivo: agotar recursos del servidor (CPU, RAM, ancho de banda)</li>
+            <li>Impacto: pérdidas económicas, interrupción de servicios críticos</li>
+          </ul>
+          <p class="mt-1"><strong>Casos reales:</strong></p>
+          <ul>
+            <li>Ataques a bancos y sistemas financieros</li>
+            <li>Portales gubernamentales</li>
+            <li>Hospitales y servicios de emergencia</li>
+          </ul>
+          <div class="law-badge">⚖️ Art. 9 — Crimen grave cuando afecta infraestructura nacional. Prisión + multa.</div>
+        </div>
+        <div>
+          <div class="code-block">  [Bot 1] ─┐
+  [Bot 2] ─┤
+  [Bot 3] ─┼──► SERVIDOR
+  [Bot 4] ─┤  (miles de peticiones)
+  [Bot N] ─┘
+           │
+           ▼
+    CAÍDA DEL SERVICIO
+    Usuarios sin acceso
+    Pérdidas económicas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de sanciones -->
+    <h3 class="fw-700 mt-2 mb-05" style="font-size:1.05rem;color:rgba(255,255,255,.9);">
+      ⚖️ Relación con la Ley 53-07 — Sanciones
+    </h3>
+    <table class="delito-table">
+      <thead>
+        <tr>
+          <th>Delito</th>
+          <th>Artículo</th>
+          <th>Sanción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Acceso ilícito / Hackeo</td><td>Art. 5</td><td>Prisión + multa</td></tr>
+        <tr><td>Phishing / Fraude digital</td><td>Art. 23</td><td>Prisión 3–10 años</td></tr>
+        <tr><td>Distribución de malware</td><td>Art. 10</td><td>Prisión + multa</td></tr>
+        <tr><td>Interceptación de datos</td><td>Art. 7</td><td>Prisión correccional</td></tr>
+        <tr><td>Robo de identidad</td><td>Art. 23–24</td><td>Prisión + multa</td></tr>
+        <tr><td>Ataques DDoS</td><td>Art. 9</td><td>Prisión + multa</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:.8rem;color:rgba(255,255,255,.45);margin-top:.75rem;">
+      ⚠️ Las sanciones se agravan si afectan sistemas del Estado o infraestructura crítica.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ IMPACTO ═══════════════════════ -->
+<section id="impacto">
+  <div class="container">
+    <p class="section-label text-blue">04 — Impacto y Prevención</p>
+    <div class="divider" style="background:linear-gradient(90deg,var(--blue),transparent);"></div>
+    <h2 class="section-title">Consecuencias e impacto de los ciberataques</h2>
+    <p class="section-sub">
+      Un ataque exitoso no solo daña sistemas — afecta finanzas, reputación
+      y la confianza de clientes e instituciones.
+    </p>
+
+    <div class="impact-grid">
+      <div class="impact-card" style="background:#fff7ed;border-color:#fde68a;">
+        <div class="icon">⏹️</div>
+        <h3>Impacto Técnico</h3>
+        <ul>
+          <li>Interrupción del servicio</li>
+          <li>Pérdida o corrupción de datos</li>
+          <li>Brechas de seguridad</li>
+          <li>Tiempo de recuperación: horas o días</li>
+          <li>Daño a infraestructura digital</li>
+        </ul>
+      </div>
+      <div class="impact-card" style="background:#fff1f2;border-color:#fecdd3;">
+        <div class="icon">💸</div>
+        <h3>Impacto Económico</h3>
+        <ul>
+          <li>Costos directos de robo o fraude</li>
+          <li>Gastos de recuperación de sistemas</li>
+          <li>Multas regulatorias</li>
+          <li>Caída en productividad</li>
+          <li>Inversión en seguridad post-ataque</li>
+        </ul>
+      </div>
+      <div class="impact-card" style="background:#f5f3ff;border-color:#ddd6fe;">
+        <div class="icon">📉</div>
+        <h3>Impacto Reputacional</h3>
+        <ul>
+          <li>Pérdida de confianza de clientes</li>
+          <li>Cobertura mediática negativa</li>
+          <li>Caída en valoración corporativa</li>
+          <li>Ruptura de contratos y alianzas</li>
+          <li>Investigaciones regulatorias</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Tríada CIA -->
+    <h3 class="fw-700 mt-2 mb-05" style="font-size:1.1rem;">🔐 Seguridad Informática — Tríada CIA</h3>
+    <p style="color:var(--gray-600);font-size:.9rem;margin-bottom:1rem;">
+      La seguridad informática busca garantizar tres pilares fundamentales:
+    </p>
+    <div class="cia-triad">
+      <div class="cia-item cia-blue">
+        <div class="cia-icon">🔒</div>
+        <h4>Confidencialidad</h4>
+        <p>Solo acceden quienes están autorizados. Cifrado, permisos y control de acceso.</p>
+      </div>
+      <div class="cia-item cia-green">
+        <div class="cia-icon">✅</div>
+        <h4>Integridad</h4>
+        <p>Los datos no son alterados sin autorización. Hashes, firmas digitales y auditoría.</p>
+      </div>
+      <div class="cia-item cia-cyan">
+        <div class="cia-icon">🟢</div>
+        <h4>Disponibilidad</h4>
+        <p>Sistemas siempre accesibles para los usuarios legítimos. Alta disponibilidad y redundancia.</p>
+      </div>
+    </div>
+
+    <!-- Herramientas -->
+    <h3 class="fw-700 mt-2 mb-05" style="font-size:1.1rem;">🔧 Medidas de Protección</h3>
+    <div class="tools-grid">
+      <div class="tool-item">
+        <span class="t-icon">🔥</span>
+        <div><h4>Firewall</h4><p>Filtra tráfico de red no autorizado.</p></div>
+      </div>
+      <div class="tool-item">
+        <span class="t-icon">🦠</span>
+        <div><h4>Antivirus / EDR</h4><p>Detecta y elimina software malicioso.</p></div>
+      </div>
+      <div class="tool-item">
+        <span class="t-icon">🔐</span>
+        <div><h4>Cifrado SSL/TLS</h4><p>Protege datos en tránsito.</p></div>
+      </div>
+      <div class="tool-item">
+        <span class="t-icon">🔑</span>
+        <div><h4>MFA</h4><p>Autenticación multifactor.</p></div>
+      </div>
+      <div class="tool-item">
+        <span class="t-icon">📋</span>
+        <div><h4>IDS / IPS</h4><p>Detecta y previene intrusiones.</p></div>
+      </div>
+      <div class="tool-item">
+        <span class="t-icon">🗄️</span>
+        <div><h4>Backups</h4><p>Recuperación ante ransomware.</p></div>
+      </div>
+      <div class="tool-item">
+        <span class="t-icon">🌐</span>
+        <div><h4>VPN</h4><p>Cifra comunicaciones en redes públicas.</p></div>
+      </div>
+    </div>
+
+    <!-- Buenas prácticas -->
+    <h3 class="fw-700 mt-2 mb-05" style="font-size:1.1rem;">✅ Buenas Prácticas</h3>
+    <div class="practices-cols">
+      <div class="practice-box" style="background:#f0fdf4;border-color:#bbf7d0;">
+        <h3>👤 Para usuarios</h3>
+        <ul>
+          <li>Contraseñas largas y únicas (mínimo 12 caracteres)</li>
+          <li>Activar autenticación en dos pasos (2FA/MFA)</li>
+          <li>No abrir correos sospechosos ni links desconocidos</li>
+          <li>Usar redes Wi-Fi seguras o VPN</li>
+        </ul>
+      </div>
+      <div class="practice-box" style="background:#eff6ff;border-color:#bfdbfe;">
+        <h3>🏢 Para organizaciones</h3>
+        <ul>
+          <li>Mantener sistemas y software siempre actualizados</li>
+          <li>Capacitar al personal en conciencia de seguridad</li>
+          <li>Realizar pruebas de penetración periódicas</li>
+          <li>Tener un plan de respuesta a incidentes</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Rol de la ley -->
+    <h3 class="fw-700 mt-2 mb-05" style="font-size:1.1rem;">⚖️ Rol de la Ley en la Prevención</h3>
+    <p style="color:var(--gray-600);font-size:.9rem;margin-bottom:1rem;">
+      La Ley 53-07 actúa como <strong>barrera preventiva</strong>:
+    </p>
+    <div class="law-roles">
+      <div class="law-role">
+        <div class="r-icon">🚫</div>
+        <p>Disuade a potenciales atacantes con penas de prisión</p>
+      </div>
+      <div class="law-role">
+        <div class="r-icon">📢</div>
+        <p>Concientiza a la sociedad sobre la ilegalidad de estos actos</p>
+      </div>
+      <div class="law-role">
+        <div class="r-icon">🏛️</div>
+        <p>Obliga a empresas a adoptar medidas de seguridad</p>
+      </div>
+      <div class="law-role">
+        <div class="r-icon">🤝</div>
+        <p>Facilita la cooperación internacional en cibercrimen</p>
+      </div>
+      <div class="law-role">
+        <div class="r-icon">🔍</div>
+        <p>Habilita a las autoridades para investigar estos delitos</p>
+      </div>
+    </div>
+    <p style="font-size:.9rem;color:var(--gray-600);margin-top:1rem;">
+      Una ley efectiva no solo castiga — <strong>previene antes de que ocurra el daño</strong>.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ CONCLUSIÓN ═══════════════════ -->
+<section id="conclusion">
+  <div class="container">
+    <p class="section-label" style="color:var(--cyan);">05 — Conclusión</p>
+    <div class="divider" style="background:linear-gradient(90deg,var(--cyan),transparent);"></div>
+    <h2 class="section-title">Ley + Seguridad = Protección Digital</h2>
+    <p style="color:rgba(255,255,255,.65);font-size:1rem;max-width:680px;margin:0 auto 2.5rem;">
+      La combinación del marco legal y las buenas prácticas de seguridad informática
+      garantiza la protección de ciudadanos, empresas y el Estado.
+    </p>
+
+    <div class="conclusion-grid">
+      <div class="concl-card">
+        <div class="c-icon">⚖️</div>
+        <h4>Ley 53-07</h4>
+        <ul>
+          <li>Sanciona delitos digitales</li>
+          <li>Tipifica crímenes informáticos</li>
+          <li>Disuade a atacantes</li>
+        </ul>
+      </div>
+      <div class="concl-card">
+        <div class="c-icon">🛡️</div>
+        <h4>Seguridad Informática</h4>
+        <ul>
+          <li>Previene ataques</li>
+          <li>Protege sistemas y datos</li>
+          <li>Educa a los usuarios</li>
+        </ul>
+      </div>
+      <div class="concl-card">
+        <div class="c-icon">🌐</div>
+        <h4>Protección Digital</h4>
+        <ul>
+          <li>Ciudadanos seguros</li>
+          <li>Empresas protegidas</li>
+          <li>Estado resiliente</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="final-message">
+      <div class="fm-icon">🔑</div>
+      <h3>Mensaje Final</h3>
+      <p>
+        Como futuros ingenieros en sistemas, somos la <strong>primera línea de defensa</strong>.
+        Conocer la ley y aplicar buenas prácticas de seguridad es nuestra
+        <strong>responsabilidad profesional y ética</strong>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FOOTER ═══════════════════════ -->
+<footer>
+  <p>Presentación académica — Ley No. 53-07 — República Dominicana</p>
+</footer>
+
+<script>
+  function showDelito(id, btn) {
+    // Hide all panels and deactivate tabs
+    document.querySelectorAll('.delito-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.delito-tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    // Show selected panel and activate tab
+    document.getElementById('panel-' + id).classList.add('active');
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+  }
+
+  // Keyboard navigation for tab list
+  document.querySelector('.delito-tabs').addEventListener('keydown', function(e) {
+    const tabs = Array.from(this.querySelectorAll('[role="tab"]'));
+    const current = document.activeElement;
+    const idx = tabs.indexOf(current);
+    if (idx === -1) return;
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+    if (e.key === 'ArrowLeft')  next = (idx - 1 + tabs.length) % tabs.length;
+    if (e.key === 'Home') next = 0;
+    if (e.key === 'End')  next = tabs.length - 1;
+    if (next !== -1) {
+      e.preventDefault();
+      tabs[next].focus();
+      tabs[next].click();
+    }
+  });
+</script>
+
+</body>
+</html>
